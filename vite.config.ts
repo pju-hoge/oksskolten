@@ -45,7 +45,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['v2/mountain/favicon-black-tight.png', 'v2/mountain/favicon-white-tight.png', 'apple-touch-icon-180x180.png'],
+        includeAssets: ['icons/favicon-black.png', 'icons/favicon-white.png', 'apple-touch-icon-180x180.png'],
         manifest: {
           name: 'Oksskolten',
           short_name: 'Oksskolten',
@@ -79,7 +79,7 @@ export default defineConfig(({ mode }) => {
               purpose: 'maskable',
             },
             {
-              src: 'v2/mountain/favicon-black-tight.png',
+              src: 'icons/favicon-black.png',
               sizes: '64x64',
               type: 'image/png',
             },

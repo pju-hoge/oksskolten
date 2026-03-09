@@ -120,7 +120,7 @@ function AboutTab() {
 
   return (
     <div className="flex flex-col items-center justify-center py-16 select-none">
-      <img src="/v1/pwa-192x192.png" alt={APP_NAME} className="w-16 h-16 rounded-2xl mb-4" />
+      <img src="/pwa-192x192.png" alt={APP_NAME} className="w-16 h-16 rounded-2xl mb-4" />
       <h2 className="text-lg font-bold text-text">{APP_NAME}</h2>
       <p className="text-sm text-muted mt-1">{t('about.version')} {__APP_VERSION__}</p>
 

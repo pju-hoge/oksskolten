@@ -172,8 +172,8 @@ export function ChatPage() {
                         <Thumbnail src={conv.article_og_image} articleUrl={conv.article_url} />
                       ) : (
                         <>
-                          <img src="/v2/mountain/favicon-black-tight.png" alt="" className="h-10 w-10 dark:hidden" />
-                          <img src="/v2/mountain/favicon-white-tight.png" alt="" className="h-10 w-10 hidden dark:block" />
+                          <img src="/icons/favicon-black.png" alt="" className="h-10 w-10 dark:hidden" />
+                          <img src="/icons/favicon-white.png" alt="" className="h-10 w-10 hidden dark:block" />
                         </>
                       )}
                     </div>
