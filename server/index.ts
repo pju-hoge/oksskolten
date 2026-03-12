@@ -60,6 +60,7 @@ const isDev = process.env.NODE_ENV === 'development'
 
 const app = Fastify({
   disableRequestLogging: true,
+  trustProxy: !isDev,
   logger: {
     level: process.env.LOG_LEVEL || 'info',
     ...(isDev
@@ -70,7 +71,7 @@ const app = Fastify({
 
 // Plugins
 const JWT_EXPIRY = '30d'
-const RATE_LIMIT_MAX = 100
+const RATE_LIMIT_MAX = 300
 const RATE_LIMIT_WINDOW = '1 minute'
 const MULTIPART_MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 
@@ -81,6 +82,7 @@ await app.register(jwt, {
 await app.register(rateLimit, {
   max: RATE_LIMIT_MAX,
   timeWindow: RATE_LIMIT_WINDOW,
+  allowList: (req) => !req.url.startsWith('/api'),
 })
 await app.register(multipart, {
   limits: { fileSize: MULTIPART_MAX_FILE_SIZE },

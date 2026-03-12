@@ -7,7 +7,7 @@ services:
     environment:
       NODE_ENV: production
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
-    volumes:
+    volumes: !override
       - ${DATA_DIR:-./data}:/data
     ports: !override []
     expose:
