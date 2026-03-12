@@ -818,9 +818,13 @@ If `account_name` is not set, the auth email address is saved as the initial val
   "reading.unread_indicator": "on",
   "reading.internal_links": "off",
   "reading.show_thumbnails": "on",
+  "reading.show_feed_activity": "on",
+  "reading.chat_position": "fab",
+  "reading.article_open_mode": "page",
   "appearance.highlight_theme": "github-dark",
   "appearance.font_family": null,
-  "appearance.list_layout": "list"
+  "appearance.list_layout": "list",
+  "appearance.mascot": "off"
 }
 ```
 
@@ -841,9 +845,13 @@ Unset items are `null`.
 | `reading.unread_indicator` | `"on"` / `"off"` |
 | `reading.internal_links` | `"on"` / `"off"` |
 | `reading.show_thumbnails` | `"on"` / `"off"` |
+| `reading.show_feed_activity` | `"on"` / `"off"` |
+| `reading.chat_position` | `"fab"` / `"inline"` |
+| `reading.article_open_mode` | `"page"` / `"overlay"` |
 | `appearance.highlight_theme` | Any string (theme name). Empty string to delete |
 | `appearance.font_family` | Any string (font name). Empty string to delete |
 | `appearance.list_layout` | `"list"` / `"card"` / `"magazine"` / `"compact"` |
+| `appearance.mascot` | `"off"` / `"dream-puff"` / `"sleepy-giant"` |
 | `chat.provider` | `"anthropic"` / `"gemini"` / `"openai"` / `"claude-code"` |
 | `chat.model` | Model ID depending on the provider |
 | `summary.provider` | `"anthropic"` / `"gemini"` / `"openai"` / `"claude-code"` |
