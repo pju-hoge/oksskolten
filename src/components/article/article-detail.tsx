@@ -62,7 +62,7 @@ export function ArticleDetail({ articleUrl }: ArticleDetailProps) {
   // Sync translation/summary back into SWR cache so it persists across navigations
   useEffect(() => {
     if (fullTextTranslated && article && article.full_text_translated !== fullTextTranslated) {
-      void mutate({ ...article, full_text_translated: fullTextTranslated }, false)
+      void mutate({ ...article, full_text_translated: fullTextTranslated, translated_lang: locale }, false)
     }
   }, [fullTextTranslated]) // eslint-disable-line react-hooks/exhaustive-deps -- only sync when translated text changes; article/mutate are refs to current data
 
