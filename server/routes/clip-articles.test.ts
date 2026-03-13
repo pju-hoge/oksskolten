@@ -469,6 +469,65 @@ describe('GET /api/articles smartFloor bypass for clip feeds', () => {
     expect(body.articles.length).toBe(5)
   })
 
+  it('returns total_without_floor when smartFloor hides articles', async () => {
+    const feed = seedFeed({ url: 'https://twf.example.com' })
+
+    for (let i = 0; i < 5; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/twf-recent-${i}`,
+        published_at: daysAgo(i),
+      })
+      markArticleSeen(id, true)
+    }
+    for (let i = 0; i < 20; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/twf-old-${i}`,
+        published_at: daysAgo(30 + i),
+      })
+      markArticleSeen(id, true)
+    }
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/articles?feed_id=${feed.id}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.total).toBe(20)
+    expect(body.total_without_floor).toBe(25)
+  })
+
+  it('no_floor=1 bypasses smartFloor and returns all articles', async () => {
+    const feed = seedFeed({ url: 'https://nofloor.example.com' })
+
+    for (let i = 0; i < 5; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/nf-recent-${i}`,
+        published_at: daysAgo(i),
+      })
+      markArticleSeen(id, true)
+    }
+    for (let i = 0; i < 20; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/nf-old-${i}`,
+        published_at: daysAgo(30 + i),
+      })
+      markArticleSeen(id, true)
+    }
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/articles?feed_id=${feed.id}&no_floor=1&limit=100`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.articles.length).toBe(25)
+    expect(body.total).toBe(25)
+    expect(body.total_without_floor).toBeUndefined()
+  })
+
   it('still applies smartFloor to regular (non-clip) feeds', async () => {
     const feed = seedFeed({ url: 'https://regular.example.com' })
 

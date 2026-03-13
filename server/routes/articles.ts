@@ -59,6 +59,7 @@ const ArticlesQuery = z.object({
   liked: z.string().optional(),
   read: z.string().optional(),
   sort: z.string().optional(),
+  no_floor: z.string().optional(),
   limit: coerceOptionalNumber,
   offset: coerceOptionalNumber,
 })
@@ -211,12 +212,13 @@ export async function articleRoutes(api: FastifyInstance): Promise<void> {
     const liked = query.liked === '1'
     const read = query.read === '1'
     const sort = query.sort === 'score' ? 'score' as const : undefined
+    const noFloor = query.no_floor === '1'
 
     const isClipFeed = feedId != null && getClipFeed()?.id === feedId
-    const smartFloor = !isClipFeed && !unread && !bookmarked && !liked && !read
-    const { articles, total } = getArticles({ feedId, categoryId, unread, bookmarked, liked, read, sort, limit, offset, smartFloor })
+    const smartFloor = !noFloor && !isClipFeed && !unread && !bookmarked && !liked && !read
+    const { articles, total, totalWithoutFloor } = getArticles({ feedId, categoryId, unread, bookmarked, liked, read, sort, limit, offset, smartFloor })
     const hasMore = offset + articles.length < total
-    reply.send({ articles, total, has_more: hasMore })
+    reply.send({ articles, total, has_more: hasMore, ...(totalWithoutFloor != null ? { total_without_floor: totalWithoutFloor } : {}) })
   })
 
   api.get('/api/articles/search', async (request, reply) => {

@@ -27,6 +27,7 @@ interface ArticlesResponse {
   articles: ArticleListItem[]
   total: number
   has_more: boolean
+  total_without_floor?: number
 }
 
 const PAGE_SIZE = 20
@@ -61,6 +62,7 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
   const readOnly = isHistory
   const { autoMarkRead, dateMode, indicatorStyle, layout, articleOpenMode } = settings
   const [overlayUrl, setOverlayUrl] = useState<string | null>(null)
+  const [noFloor, setNoFloor] = useState(false)
   const displayConfig: ArticleDisplayConfig = useMemo(() => ({
     dateMode,
     indicatorStyle,
@@ -80,6 +82,7 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
     if (bookmarkedOnly) params.set('bookmarked', '1')
     if (likedOnly) params.set('liked', '1')
     if (readOnly) params.set('read', '1')
+    if (noFloor) params.set('no_floor', '1')
     params.set('limit', String(PAGE_SIZE))
     params.set('offset', String(pageIndex * PAGE_SIZE))
     return `/api/articles?${params.toString()}`
@@ -100,6 +103,9 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
   const articles = useMemo(() => data ? data.flatMap(page => page.articles) : [], [data])
   const hasMore = data ? data[data.length - 1]?.has_more ?? false : false
   const isEmpty = data?.[0]?.articles.length === 0
+  const hiddenByFloor = data?.[0]?.total_without_floor != null
+    ? data[0].total_without_floor - (data[0].total ?? 0)
+    : 0
 
   // ---------------------------------------------------------------------------
   // Infinite scroll
@@ -280,9 +286,10 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
     }
   }, [feedId, categoryId, flushBatch])
 
-  // Reset autoReadIds when feed/category changes
+  // Reset autoReadIds and noFloor when feed/category changes
   useEffect(() => {
     setAutoReadIds(new Set())
+    setNoFloor(false)
   }, [feedId, categoryId])
 
   return (
@@ -381,6 +388,17 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
       {hasMore && (
         <div ref={sentinelCallbackRef} className="py-4">
           {isValidating && <ArticleListSkeleton layout={layout} count={2} showThumbnails={displayConfig.showThumbnails} />}
+        </div>
+      )}
+
+      {!hasMore && hiddenByFloor > 0 && (
+        <div className="text-center py-6">
+          <button
+            onClick={() => setNoFloor(true)}
+            className="text-accent text-sm hover:underline"
+          >
+            {t('articles.showOlder', { count: String(hiddenByFloor) })}
+          </button>
         </div>
       )}
 

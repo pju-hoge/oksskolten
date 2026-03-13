@@ -80,7 +80,7 @@ export function getArticles(opts: {
   limit: number
   offset: number
   smartFloor?: boolean
-}): { articles: ArticleListItem[]; total: number } {
+}): { articles: ArticleListItem[]; total: number; totalWithoutFloor?: number } {
   const conditions: string[] = []
   const params: Record<string, unknown> = {}
 
@@ -113,6 +113,8 @@ export function getArticles(opts: {
   const SMART_FLOOR_DAYS = 7
   const SMART_FLOOR_MIN_ARTICLES = 20
 
+  let floorApplied = false
+
   if (opts.smartFloor) {
     const scopeWhere = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
 
@@ -144,8 +146,17 @@ export function getArticles(opts: {
 
       conditions.push('(a.published_at IS NULL OR a.published_at >= @smartFloorDate)')
       params.smartFloorDate = smartFloorDate
+      floorApplied = true
     }
   }
+
+  // Count without floor for "show more" UI
+  const baseWhere = floorApplied
+    ? (() => {
+        const baseConditions = conditions.filter(c => !c.includes('@smartFloorDate'))
+        return baseConditions.length > 0 ? 'WHERE ' + baseConditions.join(' AND ') : ''
+      })()
+    : undefined
 
   const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
   const orderBy = opts.sort === 'score'
@@ -156,6 +167,10 @@ export function getArticles(opts: {
     SELECT COUNT(*) AS cnt FROM articles a ${where}
   `, params)
   const total = totalRow.cnt
+
+  const totalWithoutFloor = baseWhere != null
+    ? getNamed<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM articles a ${baseWhere}`, params).cnt
+    : undefined
 
   const articles = allNamed<ArticleListItem>(`
     SELECT a.id, a.feed_id, f.name AS feed_name,
@@ -168,7 +183,7 @@ export function getArticles(opts: {
     LIMIT @_limit OFFSET @_offset
   `, { ...params, _limit: Number(opts.limit), _offset: Number(opts.offset) })
 
-  return { articles, total }
+  return { articles, total, ...(totalWithoutFloor != null && totalWithoutFloor > total ? { totalWithoutFloor } : {}) }
 }
 
 export function getArticleByUrl(url: string): ArticleDetail | undefined {

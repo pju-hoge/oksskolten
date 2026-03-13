@@ -110,6 +110,7 @@ const dict = {
   'hint.likes': { ja: 'いいねした記事がここに。検索やレコメンドのスコアリングにも反映されます。', en: 'Articles you\'ve liked live here. Likes also boost search and recommendation scoring.' },
   'hint.clips': { ja: 'フィードを追跡するほどじゃない相手の記事を、URL指定で個別に保存できます。', en: 'Save individual articles by URL — perfect for sources you don\'t need a full feed for.' },
   'hint.history': { ja: '記事を開いて読んだ履歴。「スクロールで自動既読」で流れたものは含まず、実際に開いた記事だけが残ります。', en: 'Articles you actually opened and read. Items swept away by "Auto-Mark As Read On Scroll" aren\'t included — only articles you tapped into.' },
+  'articles.showOlder': { ja: 'もっと読む（${count}件）', en: 'Show older articles (${count})' },
   'articles.allCaughtUp': { ja: '全部読んだよ！', en: "You're all caught up!" },
 
   // ArticleDetail

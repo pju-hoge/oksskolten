@@ -615,6 +615,43 @@ describe('getArticles smartFloor', () => {
     expect(articles.length).toBeGreaterThanOrEqual(20)
   })
 
+  it('returns totalWithoutFloor when smartFloor hides articles', () => {
+    const feed = seedFeed()
+    // 5 recent + 20 old articles (all seen, total 25 > 20)
+    for (let i = 0; i < 5; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/twf-recent-${i}`,
+        published_at: daysAgo(i),
+      })
+      markArticleSeen(id, true)
+    }
+    for (let i = 0; i < 20; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/twf-old-${i}`,
+        published_at: daysAgo(30 + i),
+      })
+      markArticleSeen(id, true)
+    }
+
+    const result = getArticles({ feedId: feed.id, smartFloor: true, limit: 100, offset: 0 })
+    // smartFloor limits the result, totalWithoutFloor shows the real count
+    expect(result.total).toBeLessThan(25)
+    expect(result.totalWithoutFloor).toBe(25)
+  })
+
+  it('does not return totalWithoutFloor when no articles are hidden', () => {
+    const feed = seedFeed()
+    for (let i = 0; i < 5; i++) {
+      seedArticle(feed.id, {
+        url: `https://example.com/no-twf-${i}`,
+        published_at: daysAgo(i),
+      })
+    }
+
+    const result = getArticles({ feedId: feed.id, smartFloor: true, limit: 100, offset: 0 })
+    expect(result.totalWithoutFloor).toBeUndefined()
+  })
+
   it('shows all articles when fewer than 20 exist, even if older than 1 week', () => {
     const feed = seedFeed()
     // 9 articles, all older than 7 days, all seen
