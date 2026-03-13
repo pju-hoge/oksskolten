@@ -29,7 +29,8 @@ describe('ErrorBoundary', () => {
         <ThrowingChild error={new Error('Something broke')} />
       </ErrorBoundary>,
     )
-    expect(screen.getByText(/\[React error\] Something broke/)).toBeTruthy()
+    expect(screen.getByText('Something went wrong')).toBeTruthy()
+    expect(screen.getByText('Something broke')).toBeTruthy()
   })
 
   it('renders error stack', () => {
