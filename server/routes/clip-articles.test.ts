@@ -472,14 +472,16 @@ describe('GET /api/articles smartFloor bypass for clip feeds', () => {
   it('still applies smartFloor to regular (non-clip) feeds', async () => {
     const feed = seedFeed({ url: 'https://regular.example.com' })
 
-    // 1 recent article + 5 old articles (all seen)
-    const recentId = seedArticle(feed.id, {
-      url: 'https://example.com/regular-recent',
-      published_at: daysAgo(1),
-    })
-    markArticleSeen(recentId, true)
-
+    // 5 recent articles within 7 days + 20 old articles (all seen, total > 20)
     for (let i = 0; i < 5; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/regular-recent-${i}`,
+        published_at: daysAgo(i),
+      })
+      markArticleSeen(id, true)
+    }
+
+    for (let i = 0; i < 20; i++) {
       const id = seedArticle(feed.id, {
         url: `https://example.com/regular-old-${i}`,
         published_at: daysAgo(30 + i),
@@ -494,8 +496,8 @@ describe('GET /api/articles smartFloor bypass for clip feeds', () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    // smartFloor should hide old articles — only the recent one remains
-    expect(body.articles.length).toBe(1)
-    expect(body.articles[0].url).toBe('https://example.com/regular-recent')
+    // smartFloor should hide articles older than 7 days (beyond the 20-article floor)
+    // 25 total, 20th newest is within old range, 7-day window has 5 → floor = max(7days, 20th) → 20
+    expect(body.articles.length).toBe(20)
   })
 })

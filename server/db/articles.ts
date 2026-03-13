@@ -133,14 +133,18 @@ export function getArticles(opts: {
       ${scopeWhere ? scopeWhere + ' AND' : 'WHERE'} a.seen_at IS NULL AND a.published_at IS NOT NULL
     `, params)
 
-    // Pick the earliest (= shows the most articles)
-    const candidates: string[] = [floorAgo]
-    if (top20Row?.floor) candidates.push(top20Row.floor)
-    if (unreadRow?.floor) candidates.push(unreadRow.floor)
-    const smartFloorDate = candidates.sort()[0]
+    // If fewer than SMART_FLOOR_MIN_ARTICLES exist, skip the floor entirely — show all
+    if (!top20Row?.floor) {
+      // no-op: don't add a date condition
+    } else {
+      // Pick the earliest (= shows the most articles)
+      const candidates: string[] = [floorAgo, top20Row.floor]
+      if (unreadRow?.floor) candidates.push(unreadRow.floor)
+      const smartFloorDate = candidates.sort()[0]
 
-    conditions.push('(a.published_at IS NULL OR a.published_at >= @smartFloorDate)')
-    params.smartFloorDate = smartFloorDate
+      conditions.push('(a.published_at IS NULL OR a.published_at >= @smartFloorDate)')
+      params.smartFloorDate = smartFloorDate
+    }
   }
 
   const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''

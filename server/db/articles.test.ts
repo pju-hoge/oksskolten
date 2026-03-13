@@ -615,6 +615,22 @@ describe('getArticles smartFloor', () => {
     expect(articles.length).toBeGreaterThanOrEqual(20)
   })
 
+  it('shows all articles when fewer than 20 exist, even if older than 1 week', () => {
+    const feed = seedFeed()
+    // 9 articles, all older than 7 days, all seen
+    for (let i = 0; i < 9; i++) {
+      const id = seedArticle(feed.id, {
+        url: `https://example.com/few-${i}`,
+        published_at: daysAgo(10 + i),
+      })
+      markArticleSeen(id, true)
+    }
+
+    const { articles } = getArticles({ feedId: feed.id, smartFloor: true, limit: 100, offset: 0 })
+    // Fewer than 20 articles → no floor applied, all 9 should appear
+    expect(articles.length).toBe(9)
+  })
+
   it('includes articles with null published_at regardless of floor', () => {
     const feed = seedFeed()
     // 1 article with no published_at
