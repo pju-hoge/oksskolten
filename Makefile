@@ -37,8 +37,17 @@ dev-scratch: ## Rebuild dev from scratch (removes volumes)
 	$(COMPOSE) down -v
 	$(COMPOSE) up --build
 
+PROD_COMPOSE = DATA_DIR=./data-prod $(COMPOSE) -p oksskolten-prod -f compose.yaml -f compose.prod.yaml
+
 prod: ## Start production environment
-	$(COMPOSE) -f compose.yaml -f compose.prod.yaml up -d --build
+	$(PROD_COMPOSE) up -d --build
 
 prod-down: ## Stop production environment
-	$(COMPOSE) -f compose.yaml -f compose.prod.yaml down
+	$(PROD_COMPOSE) down
+
+prod-logs: ## Show production logs
+	$(PROD_COMPOSE) logs -f --tail=50
+
+prod-restart: ## Rebuild and restart production server
+	$(PROD_COMPOSE) build --no-cache server
+	$(PROD_COMPOSE) up -d server
