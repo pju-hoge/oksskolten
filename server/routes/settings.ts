@@ -42,6 +42,7 @@ const PREF_KEYS = [
   'summary.model',
   'translate.provider',
   'translate.model',
+  'translate.target_lang',
   'custom_themes',
 ] as const
 type PrefKey = typeof PREF_KEYS[number]
@@ -66,6 +67,7 @@ const PREF_ALLOWED: Record<PrefKey, string[] | null> = {
   'summary.model': getAllModelValues(),
   'translate.provider': ['anthropic', 'gemini', 'openai', 'claude-code', 'google-translate', 'deepl'],
   'translate.model': getAllModelValues(),
+  'translate.target_lang': ['ja', 'en'],
   'custom_themes': null,
 }
 

@@ -4,10 +4,11 @@ import { fetcher, apiPost } from '../../../lib/fetcher'
 import { PROVIDER_LABELS, LLM_API_PROVIDERS, TRANSLATE_SERVICE_PROVIDERS } from '../../../data/aiModels'
 import { Input } from '@/components/ui/input'
 import { FormField } from '@/components/ui/form-field'
+import type { Settings } from '../../../hooks/use-settings'
 
 type TFunc = (key: any, params?: Record<string, string>) => string
 
-export function ProviderConfigSection({ t }: { t: TFunc }) {
+export function ProviderConfigSection({ t, settings }: { t: TFunc; settings: Settings }) {
   return (
     <section className="space-y-6">
       <div>
@@ -27,6 +28,30 @@ export function ProviderConfigSection({ t }: { t: TFunc }) {
           {TRANSLATE_SERVICE_PROVIDERS.map(provider => (
             <ApiProviderCard key={provider} provider={provider} t={t} />
           ))}
+        </div>
+        <div className="mt-4">
+          <h3 className="text-sm font-medium text-text mb-1">{t('settings.translateTargetLang')}</h3>
+          <p className="text-xs text-muted mb-3">{t('settings.translateTargetLangDesc')}</p>
+          <div className="flex rounded-md bg-bg-subtle p-0.5">
+            {([
+              { value: '', label: t('settings.translateTargetLangAuto') },
+              { value: 'ja', label: t('settings.languageJa') },
+              { value: 'en', label: t('settings.languageEn') },
+            ] as const).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => settings.setTranslateTargetLang(opt.value)}
+                className={`flex-1 px-2 py-1.5 text-xs rounded transition-colors select-none ${
+                  (settings.translateTargetLang || '') === opt.value
+                    ? 'bg-accent text-accent-text font-medium shadow-sm'
+                    : 'text-muted hover:text-text'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </section>

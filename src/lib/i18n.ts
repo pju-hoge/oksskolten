@@ -302,6 +302,11 @@ const dict = {
   'settings.languageJa': { ja: '日本語', en: 'Japanese' },
   'settings.languageEn': { ja: '英語', en: 'English' },
 
+  // Translation target language
+  'settings.translateTargetLang': { ja: '翻訳先言語', en: 'Translation language' },
+  'settings.translateTargetLangDesc': { ja: '記事をどの言語に翻訳するか', en: 'Language to translate articles into' },
+  'settings.translateTargetLangAuto': { ja: 'UI言語と同じ', en: 'Same as UI language' },
+
   // Data (OPML)
   'settings.data': { ja: 'データ', en: 'Data' },
   'settings.importExport': { ja: 'フィード移行', en: 'Feed Migration' },

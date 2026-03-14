@@ -43,7 +43,7 @@ ${fullText}`
 }
 
 function buildTranslatePrompt(fullText: string): string {
-  const lang = getSetting('general.language') || DEFAULT_LANGUAGE
+  const lang = getSetting('translate.target_lang') || getSetting('general.language') || DEFAULT_LANGUAGE
   const targetLang = languageName(lang)
   return `Translate the following article into ${targetLang}.
 Translate every word faithfully — do not summarize, compress, or omit anything.
@@ -155,7 +155,7 @@ export async function streamTranslateArticle(
 }
 
 function getTargetLang(): string {
-  return getSetting('general.language') || DEFAULT_LANGUAGE
+  return getSetting('translate.target_lang') || getSetting('general.language') || DEFAULT_LANGUAGE
 }
 
 async function runGoogleTranslate(fullText: string): Promise<{ fullTextTranslated: string } & AiTextResult> {

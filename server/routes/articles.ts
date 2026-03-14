@@ -37,6 +37,10 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { NumericIdParams, parseOrBadRequest } from '../lib/validation.js'
 
+function getTranslateTargetLang(): string {
+  return getSetting('translate.target_lang') || getSetting('general.language') || DEFAULT_LANGUAGE
+}
+
 const DEFAULT_ARTICLE_LIMIT = 20
 const MAX_ARTICLE_LIMIT = 100
 const MAX_CHECK_URLS = 200
@@ -459,11 +463,11 @@ export async function articleRoutes(api: FastifyInstance): Promise<void> {
     { preHandler: [requireJson] },
     createAiHandler({
       getCached: (article) => {
-        const userLang = getSetting('general.language') || DEFAULT_LANGUAGE
+        const userLang = getTranslateTargetLang()
         return article.translated_lang === userLang ? article.full_text_translated : null
       },
       validate: (article) => {
-        const userLang = getSetting('general.language') || DEFAULT_LANGUAGE
+        const userLang = getTranslateTargetLang()
         return article.lang === userLang ? `Article is already in ${userLang}` : null
       },
       streamFn: async (fullText, onDelta) => {
@@ -475,7 +479,7 @@ export async function articleRoutes(api: FastifyInstance): Promise<void> {
         return { text: r.fullTextTranslated, ...r }
       },
       applyResult: (articleId, text) => {
-        const userLang = getSetting('general.language') || DEFAULT_LANGUAGE
+        const userLang = getTranslateTargetLang()
         updateArticleContent(articleId, { full_text_translated: text, translated_lang: userLang })
         updateScore(articleId)
       },

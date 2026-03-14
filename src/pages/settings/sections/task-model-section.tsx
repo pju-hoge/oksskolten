@@ -134,6 +134,7 @@ export function TaskModelSection({ settings, t }: { settings: Settings; t: TFunc
       {!keysLoading && !hasAnyKey && (
         <p className="text-xs text-muted mt-2">{t('integration.taskSettingsNoKeys')}</p>
       )}
+
     </section>
   )
 }

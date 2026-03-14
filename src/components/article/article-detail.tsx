@@ -32,14 +32,14 @@ interface ArticleDetailProps {
 }
 
 export function ArticleDetail({ articleUrl }: ArticleDetailProps) {
-  const { settings: { internalLinks, chatPosition } } = useAppLayout()
+  const { settings: { internalLinks, chatPosition, translateTargetLang } } = useAppLayout()
   const navigate = useNavigate()
   const { t, tError, isKeyNotSetError, locale } = useI18n()
   const articleKey = `/api/articles/by-url?url=${encodeURIComponent(articleUrl)}`
   const { data: article, error, mutate } = useSWR<ArticleDetailData>(articleKey, fetcher)
   const { mutate: globalMutate } = useSWRConfig()
 
-  const isUserLang = article?.lang === locale
+  const isUserLang = article?.lang === (translateTargetLang || locale)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   const articleRef = useRef<HTMLElement>(null)
@@ -47,7 +47,7 @@ export function ArticleDetail({ articleUrl }: ArticleDetailProps) {
   const metrics = useMetrics()
   const { summary, summarizing, streamingText, handleSummarize, summaryHtml, streamingHtml, error: summarizeError } = useSummarize(article, metrics)
   // Only pass translation to the hook if it matches the current locale; stale translations are treated as absent
-  const isTranslationCurrent = article?.translated_lang === locale
+  const isTranslationCurrent = article?.translated_lang === (translateTargetLang || locale)
   const translateInput = useMemo(() =>
     article ? { id: article.id, full_text_translated: isTranslationCurrent ? article.full_text_translated : null } : undefined,
     [article, isTranslationCurrent],

@@ -41,6 +41,7 @@ interface Prefs {
   'summary.model': string | null
   'translate.provider': string | null
   'translate.model': string | null
+  'translate.target_lang': string | null
   'custom_themes': string | null
 }
 
@@ -73,6 +74,7 @@ export function useSettings() {
   const [summaryModel, setSummaryModelState] = useState<string | null>(null)
   const [translateProvider, setTranslateProviderState] = useState<string | null>(null)
   const [translateModel, setTranslateModelState] = useState<string | null>(null)
+  const [translateTargetLang, setTranslateTargetLangState] = useState<string | null>(null)
 
   // --- DB sync ---
   const { data: prefs } = useSWR<Prefs>(
@@ -150,6 +152,7 @@ export function useSettings() {
       { key: 'summary.model', setter: setSummaryModelState },
       { key: 'translate.provider', setter: setTranslateProviderState },
       { key: 'translate.model', setter: setTranslateModelState },
+      { key: 'translate.target_lang', setter: setTranslateTargetLangState },
     ]
 
     for (const { key, setter, backfillRef, validate } of hydrationMap) {
@@ -245,6 +248,7 @@ export function useSettings() {
     syncedSetSummaryModel,
     syncedSetTranslateProvider,
     syncedSetTranslateModel,
+    syncedSetTranslateTargetLang,
   } = useMemo(() => {
     const make = <T extends string>(key: keyof Prefs, setter: (v: T) => void) =>
       (value: T) => {
@@ -271,6 +275,7 @@ export function useSettings() {
       syncedSetSummaryModel: make<string>('summary.model', setSummaryModelState),
       syncedSetTranslateProvider: make<string>('translate.provider', setTranslateProviderState),
       syncedSetTranslateModel: make<string>('translate.model', setTranslateModelState),
+      syncedSetTranslateTargetLang: make<string>('translate.target_lang', setTranslateTargetLangState),
     }
     // scheduleSave and dirtyKeysRef are stable refs; remaining setters are useState/useCallback-stable
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,6 +360,8 @@ export function useSettings() {
     setTranslateProvider: syncedSetTranslateProvider,
     translateModel,
     setTranslateModel: syncedSetTranslateModel,
+    translateTargetLang,
+    setTranslateTargetLang: syncedSetTranslateTargetLang,
   }
 }
 

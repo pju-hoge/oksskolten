@@ -10,7 +10,7 @@ export function IntegrationTab() {
 
   return (
     <>
-      <ProviderConfigSection t={t} />
+      <ProviderConfigSection t={t} settings={settings} />
       <Separator />
       <TaskModelSection settings={settings} t={t} />
     </>
