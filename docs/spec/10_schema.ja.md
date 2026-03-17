@@ -60,6 +60,13 @@ erDiagram
         TEXT credential_id UK
         BLOB public_key
     }
+    api_keys {
+        INTEGER id PK
+        TEXT name
+        TEXT key_hash UK
+        TEXT key_prefix
+        TEXT scopes "read | read,write"
+    }
     settings {
         TEXT key PK
         TEXT value
@@ -71,7 +78,7 @@ erDiagram
 - `articles.category_id → categories.id`（ON DELETE SET NULL、フィードのカテゴリを非正規化）
 - `conversations.article_id → articles.id`（ON DELETE SET NULL）
 - `chat_messages.conversation_id → conversations.id`（ON DELETE CASCADE）
-- `users` / `credentials` / `settings` は他テーブルへのFKなし
+- `users` / `credentials` / `settings` / `api_keys` は他テーブルへのFKなし
 
 ### テーブル定義
 
@@ -185,6 +192,16 @@ CREATE TABLE chat_messages (
 );
 
 CREATE INDEX idx_chat_messages_conversation ON chat_messages(conversation_id, id);
+
+CREATE TABLE api_keys (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT    NOT NULL,                    -- 表示名: "監視スクリプト"
+  key_hash     TEXT    NOT NULL UNIQUE,             -- フルキーのSHA-256ハッシュ（平文は保存しない）
+  key_prefix   TEXT    NOT NULL,                    -- 表示用の先頭11文字: "ok_a1b2c3d4"
+  scopes       TEXT    NOT NULL DEFAULT 'read',     -- 'read' | 'read,write'
+  last_used_at TEXT,                                -- 検証成功ごとに更新
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
 - フィード削除時、紐づく記事は `ON DELETE CASCADE` で自動削除される

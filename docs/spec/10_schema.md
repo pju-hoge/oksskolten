@@ -60,6 +60,13 @@ erDiagram
         TEXT credential_id UK
         BLOB public_key
     }
+    api_keys {
+        INTEGER id PK
+        TEXT name
+        TEXT key_hash UK
+        TEXT key_prefix
+        TEXT scopes "read | read,write"
+    }
     settings {
         TEXT key PK
         TEXT value
@@ -71,7 +78,7 @@ erDiagram
 - `articles.category_id → categories.id` (ON DELETE SET NULL; denormalized from feed's category)
 - `conversations.article_id → articles.id` (ON DELETE SET NULL)
 - `chat_messages.conversation_id → conversations.id` (ON DELETE CASCADE)
-- `users` / `credentials` / `settings` have no foreign keys to other tables
+- `users` / `credentials` / `settings` / `api_keys` have no foreign keys to other tables
 
 ### Table Definitions
 
@@ -185,6 +192,16 @@ CREATE TABLE chat_messages (
 );
 
 CREATE INDEX idx_chat_messages_conversation ON chat_messages(conversation_id, id);
+
+CREATE TABLE api_keys (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT    NOT NULL,                    -- Display name: "Monitoring script"
+  key_hash     TEXT    NOT NULL UNIQUE,             -- SHA-256 hash of the full key (plaintext is never stored)
+  key_prefix   TEXT    NOT NULL,                    -- First 11 chars for display: "ok_a1b2c3d4"
+  scopes       TEXT    NOT NULL DEFAULT 'read',     -- 'read' | 'read,write'
+  last_used_at TEXT,                                -- Updated on each successful validation
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
 - When a feed is deleted, its associated articles are automatically removed via `ON DELETE CASCADE`

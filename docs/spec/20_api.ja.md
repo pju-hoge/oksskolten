@@ -242,9 +242,18 @@ GitHub OAuth の設定は `settings` テーブルに保存される（追加 env
 | `oauth_github_client_secret` | `xxxxxxxxxxxxxxxx` |
 | `oauth_github_allowed_users` | カンマ区切りのGitHubユーザー名（空なら App オーナーのみ） |
 
-#### 要認証（JWT）
+#### 要認証（JWT または APIキー）
 
-認証エンドポイント・Passkey公開エンドポイント以外の全 API は `Authorization: Bearer <token>` ヘッダーの JWT を検証する。JWT の `token_version` がDB上の値と一致しない場合も `401` を返す。未認証の場合は `401 { "error": "Unauthorized" }` を返す。
+認証エンドポイント・Passkey公開エンドポイント以外の全 API は、以下のいずれかで認証する:
+
+1. **JWT**: `Authorization: Bearer <jwt-token>` — フルアクセス（Web UI が使用）
+2. **APIキー**: `Authorization: Bearer ok_<hex>` — スコープ付きアクセス（外部スクリプト/ツール用）
+
+APIキーは `ok_` プレフィックスで識別される。サーバーは SHA-256 ハッシュを `api_keys` テーブルと照合し、スコープ権限をチェックする:
+- **`read` スコープ**: `GET` リクエストのみ許可
+- **`read,write` スコープ**: 全HTTPメソッド許可
+
+読み取り専用のAPIキーで非GETリクエストを送ると `403 { "error": "API key does not have write scope" }` を返す。無効なキーは `401 { "error": "Invalid API key" }`。未認証の場合は `401 { "error": "Unauthorized" }` を返す。
 
 
 **GET /api/feeds** — フィード一覧
@@ -1008,6 +1017,86 @@ settings テーブルのキー:
 |---|---|
 | 200 | 疎通成功 |
 | 400 | `images.healthcheck_url` 未設定 / SSRF ブロック / 疎通失敗 |
+
+
+#### APIトークンエンドポイント
+
+**GET /api/settings/tokens** — APIトークン一覧（要認証）
+
+```json
+// Response: 200
+[
+  {
+    "id": 1,
+    "name": "監視スクリプト",
+    "key_prefix": "ok_a1b2c3d4",
+    "scopes": "read",
+    "last_used_at": "2026-03-17 12:00:00",
+    "created_at": "2026-03-15 10:00:00"
+  }
+]
+```
+
+フルキーやキーハッシュは返さない。
+
+**POST /api/settings/tokens** — APIトークン作成（要認証）
+
+```json
+// Request
+{ "name": "監視スクリプト", "scopes": "read" }
+
+// Response: 201
+{
+  "id": 1,
+  "name": "監視スクリプト",
+  "key": "ok_6ed6d44c17a82e3af429d384ef7baa04d6268917",
+  "key_prefix": "ok_6ed6d44c",
+  "scopes": "read",
+  "last_used_at": null,
+  "created_at": "2026-03-15T10:00:00Z"
+}
+```
+
+フルの `key` は**作成時のみ1度だけ**返される。キーは `ok_` プレフィックス + 40文字のhex。データベースには SHA-256 ハッシュのみ保存される。
+
+| フィールド | 必須 | バリデーション |
+|---|---|---|
+| `name` | Yes | 1〜100文字 |
+| `scopes` | No | `"read"`（デフォルト）または `"read,write"` |
+
+**DELETE /api/settings/tokens/:id** — APIトークン削除（要認証）
+
+```json
+// Response: 200
+{ "ok": true }
+```
+
+トークンが存在しない場合は `404`。
+
+
+#### 統計エンドポイント
+
+**GET /api/stats** — 集計統計情報（要認証）
+
+```json
+// Response: 200
+{
+  "total_articles": 6184,
+  "unread_articles": 1105,
+  "read_articles": 5079,
+  "bookmarked_articles": 46,
+  "liked_articles": 4,
+  "total_feeds": 77,
+  "total_categories": 7,
+  "by_feed": [
+    { "feed_id": 1, "feed_name": "Example Blog", "total": 100, "read": 80, "unread": 20 }
+  ]
+}
+```
+
+オプションのクエリパラメータ:
+- `since`: 開始日時 ISO 8601（`published_at` でフィルタ）
+- `until`: 終了日時 ISO 8601（`published_at` でフィルタ）
 
 
 #### 管理エンドポイント

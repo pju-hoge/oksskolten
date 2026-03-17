@@ -6,7 +6,7 @@
 
 ### Approach
 
-A hybrid of three methods: password authentication with JWT + bcryptjs, passwordless authentication with WebAuthn/Passkey, and social login with GitHub OAuth. Each method can be independently enabled/disabled (with at least one always remaining active).
+A hybrid of four methods: password authentication with JWT + bcryptjs, passwordless authentication with WebAuthn/Passkey, social login with GitHub OAuth, and API key authentication for external tool access. Password/Passkey/OAuth can be independently enabled/disabled (with at least one always remaining active). API keys are always available once created.
 
 ### DB Schema
 
@@ -29,6 +29,16 @@ CREATE TABLE credentials (
   backed_up       INTEGER NOT NULL DEFAULT 0,
   transports      TEXT,
   created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE api_keys (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT    NOT NULL,
+  key_hash     TEXT    NOT NULL UNIQUE,
+  key_prefix   TEXT    NOT NULL,
+  scopes       TEXT    NOT NULL DEFAULT 'read',
+  last_used_at TEXT,
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
@@ -164,6 +174,36 @@ npx tsx scripts/reset-password.ts
 - If there is only one user, they are auto-selected; if multiple, select by number
 - Increments `token_version` to invalidate all existing sessions
 
+### API Key Authentication
+
+API keys provide programmatic access for external scripts, bots, and monitoring tools. Unlike JWT/Passkey/OAuth (which are for interactive user sessions), API keys are long-lived bearer tokens with scoped permissions.
+
+**Key format:** `ok_` prefix + 40 hex characters (e.g., `ok_6ed6d44c17a82e3af429d384ef7baa04d6268917`)
+
+**Storage:** Only the SHA-256 hash of the key is stored in the `api_keys` table. The plaintext key is shown once at creation and never again (same pattern as GitHub personal access tokens).
+
+**Authentication flow:**
+
+```
+1. External script sends request with Authorization: Bearer ok_<key>
+2. Server detects ok_ prefix → hashes the key with SHA-256
+3. Looks up hash in api_keys table
+4. If found: sets authUser = 'apikey:<id>', records last_used_at
+5. Checks scope: read-only keys can only make GET requests
+6. Non-GET with read scope → 403
+```
+
+**Scopes:**
+
+| Scope | Allowed methods |
+|---|---|
+| `read` | GET only |
+| `read,write` | GET, POST, PATCH, DELETE |
+
+Scope enforcement is applied at the plugin level via `requireWriteScope` preHandler hook, so no individual route changes are needed.
+
+**Management:** API keys are managed from Settings → Security → API Tokens section, or via the `/api/settings/tokens` endpoints.
+
 ### Local Development
 
 Skip authentication checks with `AUTH_DISABLED=1`. Only effective when `NODE_ENV=development`.
@@ -189,3 +229,7 @@ Skip authentication checks with `AUTH_DISABLED=1`. Only effective when `NODE_ENV
 - GitHub OAuth: uses a one-time exchange code instead of putting JWT in the URL (prevents leakage via logs, Referer, and browser history)
 - GitHub OAuth: CSRF prevention via the state parameter (5-minute TTL)
 - GitHub OAuth: exchange code has a 60-second TTL and is single-use (no replay)
+- API keys: `ok_` prefix enables secret scanning tools (e.g., GitHub) to detect leaked keys
+- API keys: only SHA-256 hashes are stored; plaintext is shown once at creation
+- API keys: scope enforcement via HTTP method check at plugin level (read-only keys cannot mutate data)
+- API keys: `last_used_at` tracking for audit purposes

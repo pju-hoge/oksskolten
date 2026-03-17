@@ -242,9 +242,18 @@ GitHub OAuth settings are stored in the `settings` table (zero additional env va
 | `oauth_github_client_secret` | `xxxxxxxxxxxxxxxx` |
 | `oauth_github_allowed_users` | Comma-separated GitHub usernames (empty means App owner only) |
 
-#### Auth Required (JWT)
+#### Auth Required (JWT or API Key)
 
-All API endpoints except auth endpoints and public Passkey endpoints require a JWT in the `Authorization: Bearer <token>` header. Returns `401` if the JWT's `token_version` does not match the DB value. Returns `401 { "error": "Unauthorized" }` if not authenticated.
+All API endpoints except auth endpoints and public Passkey endpoints require authentication via one of:
+
+1. **JWT**: `Authorization: Bearer <jwt-token>` — full access (used by the web UI)
+2. **API Key**: `Authorization: Bearer ok_<hex>` — scoped access (for external scripts/tools)
+
+API keys are identified by the `ok_` prefix. When an API key is used, the server validates the SHA-256 hash against the `api_keys` table and checks scope permissions:
+- **`read` scope**: allows `GET` requests only
+- **`read,write` scope**: allows all HTTP methods
+
+Non-GET requests with a read-only API key return `403 { "error": "API key does not have write scope" }`. Returns `401 { "error": "Invalid API key" }` for unrecognized keys. Returns `401 { "error": "Unauthorized" }` if not authenticated.
 
 
 **GET /api/feeds** — List feeds
@@ -1008,6 +1017,86 @@ Sends a GET request to the URL configured in `images.healthcheck_url` to verify 
 |---|---|
 | 200 | Connectivity check succeeded |
 | 400 | `images.healthcheck_url` not set / SSRF blocked / connectivity failure |
+
+
+#### API Token Endpoints
+
+**GET /api/settings/tokens** — List API tokens (auth required)
+
+```json
+// Response: 200
+[
+  {
+    "id": 1,
+    "name": "Monitoring script",
+    "key_prefix": "ok_a1b2c3d4",
+    "scopes": "read",
+    "last_used_at": "2026-03-17 12:00:00",
+    "created_at": "2026-03-15 10:00:00"
+  }
+]
+```
+
+Never returns the full key or key hash.
+
+**POST /api/settings/tokens** — Create API token (auth required)
+
+```json
+// Request
+{ "name": "Monitoring script", "scopes": "read" }
+
+// Response: 201
+{
+  "id": 1,
+  "name": "Monitoring script",
+  "key": "ok_6ed6d44c17a82e3af429d384ef7baa04d6268917",
+  "key_prefix": "ok_6ed6d44c",
+  "scopes": "read",
+  "last_used_at": null,
+  "created_at": "2026-03-15T10:00:00Z"
+}
+```
+
+The full `key` is returned **only once** at creation time. The key has a `ok_` prefix followed by 40 hex characters. Only the SHA-256 hash is stored in the database.
+
+| Field | Required | Validation |
+|---|---|---|
+| `name` | Yes | 1–100 characters |
+| `scopes` | No | `"read"` (default) or `"read,write"` |
+
+**DELETE /api/settings/tokens/:id** — Delete API token (auth required)
+
+```json
+// Response: 200
+{ "ok": true }
+```
+
+Returns `404` if the token does not exist.
+
+
+#### Stats Endpoint
+
+**GET /api/stats** — Aggregate statistics (auth required)
+
+```json
+// Response: 200
+{
+  "total_articles": 6184,
+  "unread_articles": 1105,
+  "read_articles": 5079,
+  "bookmarked_articles": 46,
+  "liked_articles": 4,
+  "total_feeds": 77,
+  "total_categories": 7,
+  "by_feed": [
+    { "feed_id": 1, "feed_name": "Example Blog", "total": 100, "read": 80, "unread": 20 }
+  ]
+}
+```
+
+Optional query parameters:
+- `since`: Start datetime ISO 8601 (filter articles by `published_at`)
+- `until`: End datetime ISO 8601 (filter articles by `published_at`)
 
 
 #### Admin Endpoints

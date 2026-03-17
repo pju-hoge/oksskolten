@@ -6,7 +6,7 @@
 
 ### 方針
 
-JWT + bcryptjs によるパスワード認証、WebAuthn/Passkey によるパスワードレス認証、GitHub OAuth によるソーシャルログインの3方式ハイブリッド。各認証方式は独立して有効/無効を切替可能（ただし最低1つは常に有効）。
+JWT + bcryptjs によるパスワード認証、WebAuthn/Passkey によるパスワードレス認証、GitHub OAuth によるソーシャルログイン、外部ツール向けのAPIキー認証の4方式ハイブリッド。パスワード/Passkey/OAuthは独立して有効/無効を切替可能（ただし最低1つは常に有効）。APIキーは作成後は常に利用可能。
 
 ### DB スキーマ
 
@@ -29,6 +29,16 @@ CREATE TABLE credentials (
   backed_up       INTEGER NOT NULL DEFAULT 0,
   transports      TEXT,
   created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE api_keys (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT    NOT NULL,
+  key_hash     TEXT    NOT NULL UNIQUE,
+  key_prefix   TEXT    NOT NULL,
+  scopes       TEXT    NOT NULL DEFAULT 'read',
+  last_used_at TEXT,
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
@@ -164,6 +174,36 @@ npx tsx scripts/reset-password.ts
 - ユーザーが1人の場合は自動選択、複数の場合は番号で選択
 - `token_version` をインクリメントし、既存セッションをすべて無効化
 
+### APIキー認証
+
+APIキーは外部スクリプト、bot、監視ツールからのプログラムによるアクセスを提供する。JWT/Passkey/OAuth（対話型ユーザーセッション用）とは異なり、APIキーはスコープ付きの長期間有効なBearerトークンである。
+
+**キー形式:** `ok_` プレフィックス + 40文字のhex（例: `ok_6ed6d44c17a82e3af429d384ef7baa04d6268917`）
+
+**保存方式:** `api_keys` テーブルにはキーの SHA-256 ハッシュのみ保存。平文のキーは作成時に1度だけ表示され、二度と表示されない（GitHub PAT と同じパターン）。
+
+**認証フロー:**
+
+```
+1. 外部スクリプトが Authorization: Bearer ok_<key> でリクエスト送信
+2. サーバーが ok_ プレフィックスを検出 → SHA-256 でハッシュ化
+3. api_keys テーブルでハッシュを照合
+4. 一致: authUser = 'apikey:<id>' をセット、last_used_at を記録
+5. スコープチェック: 読み取り専用キーは GET リクエストのみ許可
+6. read スコープで非GET → 403
+```
+
+**スコープ:**
+
+| スコープ | 許可メソッド |
+|---|---|
+| `read` | GET のみ |
+| `read,write` | GET, POST, PATCH, DELETE |
+
+スコープの適用はプラグインレベルの `requireWriteScope` preHandler フックで行うため、個別ルートの変更は不要。
+
+**管理:** APIキーは設定画面 → セキュリティ → APIトークンセクション、または `/api/settings/tokens` エンドポイントから管理する。
+
 ### ローカル開発
 
 `AUTH_DISABLED=1` で認証チェックをスキップ。`NODE_ENV=development` 時のみ有効。
@@ -189,4 +229,8 @@ npx tsx scripts/reset-password.ts
 - GitHub OAuth: JWT を URL に載せずワンタイム交換コード方式を採用（ログ・Referer・ブラウザ履歴への漏洩防止）
 - GitHub OAuth: state パラメータによる CSRF 防止（5分TTL）
 - GitHub OAuth: 交換コードは60秒TTL・1回限り消費（リプレイ不可）
+- APIキー: `ok_` プレフィックスにより、GitHub等のシークレットスキャンツールが漏洩キーを検出可能
+- APIキー: SHA-256 ハッシュのみ保存。平文は作成時に1度だけ表示
+- APIキー: プラグインレベルのHTTPメソッドチェックによるスコープ強制（読み取り専用キーはデータを変更不可）
+- APIキー: 監査用の `last_used_at` 追跡
 
