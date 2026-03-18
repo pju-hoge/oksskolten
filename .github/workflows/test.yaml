@@ -67,6 +67,8 @@ jobs:
 
       - name: Run client tests
         run: npx vitest run --project client --coverage.enabled --coverage.reporter=json-summary --coverage.reportsDirectory=coverage/client
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Upload coverage
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
