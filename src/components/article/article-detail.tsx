@@ -25,6 +25,7 @@ import { ArticleToolbar } from './article-toolbar'
 import { ArticleSummarySection } from './article-summary-section'
 import { ArticleTranslationBanner } from './article-translation-banner'
 import { ArticleContentBody } from './article-content-body'
+import { ArticleSimilarBanner } from './article-similar-banner'
 import type { ArticleDetail as ArticleDetailData } from '../../../shared/types'
 
 interface ArticleDetailProps {
@@ -225,6 +226,11 @@ export function ArticleDetail({ articleUrl }: ArticleDetailProps) {
         summarizeError={summarizeError}
         metricsText={metrics.metrics && !translating ? metrics.formatMetrics() : null}
       />
+
+      {/* Similar articles */}
+      {article.similar_count != null && article.similar_count > 0 && (
+        <ArticleSimilarBanner articleId={article.id} similarCount={article.similar_count} />
+      )}
 
       {/* Translate error */}
       {translateError && !translating && (

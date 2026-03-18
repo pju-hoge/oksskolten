@@ -74,6 +74,7 @@ export interface ArticleListItem {
   bookmarked_at: string | null
   liked_at: string | null
   score?: number
+  similar_count?: number
 }
 
 export interface ArticleDetail extends ArticleListItem {

@@ -66,4 +66,5 @@ export async function adminRoutes(api: FastifyInstance): Promise<void> {
     fetchProgress.on('event', handler)
     request.raw.on('close', cleanup)
   })
+
 }

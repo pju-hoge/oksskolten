@@ -66,7 +66,8 @@ Cron runs at 5-minute intervals (`*/5 * * * *`) and processes only feeds whose `
       - Generate 200-character preview (excerpt)
    b. If lang is NULL -> Local language detection via CJK character ratio (no API required)
    c. New articles: INSERT INTO articles / Retry: UPDATE articles
-   d. On successful processing: clear last_error = NULL
+   d. New articles: fire-and-forget async similarity detection (see [83_feature_similarity.md](./83_feature_similarity.md))
+   e. On successful processing: clear last_error = NULL
 6. Per feed: on fetch success, reset error_count=0, last_error=NULL
 7. Per feed: on fetch failure, error_count++, record in last_error
 8. Feeds with error_count >= 5 are updated to disabled = 1

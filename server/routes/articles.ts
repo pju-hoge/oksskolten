@@ -20,6 +20,7 @@ import {
   getClipFeed,
   insertArticle,
   deleteArticle,
+  getSimilarArticles,
   getDb,
   type ArticleDetail,
 } from '../db.js'
@@ -525,6 +526,16 @@ export async function articleRoutes(api: FastifyInstance): Promise<void> {
       archiveArticleImages(article.id, article.full_text).catch(err => {
         request.log.error(err, 'archive-images failed')
       })
+    },
+  )
+
+  api.get(
+    '/api/articles/:id/similar',
+    async (request, reply) => {
+      const params = parseOrBadRequest(NumericIdParams, request.params, reply)
+      if (!params) return
+      const similar = getSimilarArticles(params.id)
+      reply.send({ similar })
     },
   )
 

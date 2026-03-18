@@ -1019,6 +1019,32 @@ Sends a GET request to the URL configured in `images.healthcheck_url` to verify 
 | 400 | `images.healthcheck_url` not set / SSRF blocked / connectivity failure |
 
 
+#### Similar Articles Endpoint
+
+**GET /api/articles/:id/similar** — Get similar articles from other sources (auth required)
+
+```json
+// Response: 200
+{
+  "similar": [
+    {
+      "id": 123,
+      "feed_name": "TechCrunch",
+      "title": "Apple announces iPhone 17",
+      "url": "https://techcrunch.com/...",
+      "published_at": "2026-03-18T10:00:00Z",
+      "read_at": "2026-03-18T11:05:00Z",
+      "score": 0.82
+    }
+  ]
+}
+```
+
+Returns similar articles detected via title similarity (bigram Dice coefficient >= 0.4) from different feeds. Sorted by similarity score descending. See [83_feature_similarity.md](./83_feature_similarity.md) for detection algorithm details.
+
+Article list and detail responses include `similar_count` (integer) — the number of similar articles from other sources.
+
+
 #### API Token Endpoints
 
 **GET /api/settings/tokens** — List API tokens (auth required)

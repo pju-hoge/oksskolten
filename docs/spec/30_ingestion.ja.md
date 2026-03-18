@@ -66,7 +66,8 @@ Cron は 5 分間隔 (`*/5 * * * *`) で起動し、`next_check_at` が過ぎた
       - 200文字プレビュー（excerpt）を生成
    b. lang が NULL → ローカルでCJK文字比率から言語判定（API不要）
    c. 新着: INSERT INTO articles / リトライ: UPDATE articles
-   d. 処理成功時: last_error = NULL にクリア
+   d. 新着記事: 非同期で類似記事検出を実行（fire-and-forget、詳細は [83_feature_similarity.ja.md](./83_feature_similarity.ja.md) 参照）
+   e. 処理成功時: last_error = NULL にクリア
 6. フィード単位: fetch成功時 error_count=0, last_error=NULL にリセット
 7. フィード単位: fetch失敗時 error_count++, last_error に記録
 8. error_count >= 5 のフィードは disabled = 1 に更新

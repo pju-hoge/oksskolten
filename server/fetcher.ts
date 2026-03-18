@@ -13,6 +13,7 @@ import {
 } from './db.js'
 
 import { Semaphore, CONCURRENCY, errorMessage } from './fetcher/util.js'
+import { detectAndStoreSimilarArticles } from './similarity.js'
 import { type FetchProgressEvent, emitProgress, markFeedDone } from './fetcher/progress.js'
 import { fetchFullText, isBotBlockPage } from './fetcher/content.js'
 import { type FetchRssResult, fetchAndParseRss, RateLimitError } from './fetcher/rss.js'
@@ -138,7 +139,7 @@ async function processArticle(task: ArticleTask): Promise<void> {
   // Persist
   if (task.kind === 'new') {
     try {
-      insertArticle({
+      const articleId = insertArticle({
         feed_id: task.feed_id,
         title: task.title,
         url: task.url,
@@ -151,6 +152,8 @@ async function processArticle(task: ArticleTask): Promise<void> {
         og_image: content.ogImage,
         last_error: content.lastError,
       })
+      // Fire-and-forget: detect similar articles asynchronously
+      void detectAndStoreSimilarArticles(articleId, task.title, task.feed_id, task.published_at)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (!msg.includes('UNIQUE constraint failed')) {

@@ -1019,6 +1019,32 @@ settings テーブルのキー:
 | 400 | `images.healthcheck_url` 未設定 / SSRF ブロック / 疎通失敗 |
 
 
+#### 類似記事エンドポイント
+
+**GET /api/articles/:id/similar** — 他ソースの類似記事を取得（要認証）
+
+```json
+// Response: 200
+{
+  "similar": [
+    {
+      "id": 123,
+      "feed_name": "TechCrunch",
+      "title": "Apple announces iPhone 17",
+      "url": "https://techcrunch.com/...",
+      "published_at": "2026-03-18T10:00:00Z",
+      "read_at": "2026-03-18T11:05:00Z",
+      "score": 0.82
+    }
+  ]
+}
+```
+
+異なるフィードからタイトル類似度（bigram Dice係数 >= 0.4）で検出された類似記事を返す。類似度スコア降順。検出アルゴリズムの詳細は [83_feature_similarity.ja.md](./83_feature_similarity.ja.md) を参照。
+
+記事一覧・詳細レスポンスに `similar_count`（整数）が含まれる — 他ソースの類似記事の件数。
+
+
 #### APIトークンエンドポイント
 
 **GET /api/settings/tokens** — APIトークン一覧（要認証）

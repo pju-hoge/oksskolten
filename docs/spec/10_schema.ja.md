@@ -67,6 +67,11 @@ erDiagram
         TEXT key_prefix
         TEXT scopes "read | read,write"
     }
+    article_similarities {
+        INTEGER article_id PK,FK
+        INTEGER similar_to_id PK,FK
+        REAL score
+    }
     settings {
         TEXT key PK
         TEXT value
@@ -78,6 +83,7 @@ erDiagram
 - `articles.category_id → categories.id`（ON DELETE SET NULL、フィードのカテゴリを非正規化）
 - `conversations.article_id → articles.id`（ON DELETE SET NULL）
 - `chat_messages.conversation_id → conversations.id`（ON DELETE CASCADE）
+- `article_similarities.article_id → articles.id` および `article_similarities.similar_to_id → articles.id`（ON DELETE CASCADE）。双方向: `(A,B)` と `(B,A)` の両方を格納
 - `users` / `credentials` / `settings` / `api_keys` は他テーブルへのFKなし
 
 ### テーブル定義
@@ -202,6 +208,16 @@ CREATE TABLE api_keys (
   last_used_at TEXT,                                -- 検証成功ごとに更新
   created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE article_similarities (
+  article_id    INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  similar_to_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  score         REAL NOT NULL DEFAULT 0,            -- Bigram Dice係数（0.0〜1.0）
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (article_id, similar_to_id)
+);
+
+CREATE INDEX idx_similarities_similar_to ON article_similarities(similar_to_id);
 ```
 
 - フィード削除時、紐づく記事は `ON DELETE CASCADE` で自動削除される

@@ -67,6 +67,11 @@ erDiagram
         TEXT key_prefix
         TEXT scopes "read | read,write"
     }
+    article_similarities {
+        INTEGER article_id PK,FK
+        INTEGER similar_to_id PK,FK
+        REAL score
+    }
     settings {
         TEXT key PK
         TEXT value
@@ -78,6 +83,7 @@ erDiagram
 - `articles.category_id → categories.id` (ON DELETE SET NULL; denormalized from feed's category)
 - `conversations.article_id → articles.id` (ON DELETE SET NULL)
 - `chat_messages.conversation_id → conversations.id` (ON DELETE CASCADE)
+- `article_similarities.article_id → articles.id` and `article_similarities.similar_to_id → articles.id` (ON DELETE CASCADE). Bidirectional: both `(A,B)` and `(B,A)` are stored
 - `users` / `credentials` / `settings` / `api_keys` have no foreign keys to other tables
 
 ### Table Definitions
@@ -202,6 +208,16 @@ CREATE TABLE api_keys (
   last_used_at TEXT,                                -- Updated on each successful validation
   created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE article_similarities (
+  article_id    INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  similar_to_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  score         REAL NOT NULL DEFAULT 0,            -- Bigram Dice coefficient (0.0–1.0)
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (article_id, similar_to_id)
+);
+
+CREATE INDEX idx_similarities_similar_to ON article_similarities(similar_to_id);
 ```
 
 - When a feed is deleted, its associated articles are automatically removed via `ON DELETE CASCADE`

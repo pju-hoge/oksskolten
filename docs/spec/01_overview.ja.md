@@ -14,6 +14,7 @@
 > - [80_feature_clip.md](./80_feature_clip.ja.md) — クリップ
 > - [81_feature_images.md](./81_feature_images.ja.md) — 画像アーカイブ
 > - [82_feature_chat.md](./82_feature_chat.ja.md) — チャット
+> - [83_feature_similarity.md](./83_feature_similarity.ja.md) — 類似記事検出
 
 ## 技術スタック
 

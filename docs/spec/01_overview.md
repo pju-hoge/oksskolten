@@ -14,6 +14,7 @@ Typical RSS readers only display the title and summary provided by the feed, req
 > - [80_feature_clip.md](./80_feature_clip.md) — Clip
 > - [81_feature_images.md](./81_feature_images.md) — Image Archive
 > - [82_feature_chat.md](./82_feature_chat.md) — Chat
+> - [83_feature_similarity.md](./83_feature_similarity.md) — Similar Article Detection
 
 ## Tech Stack
 

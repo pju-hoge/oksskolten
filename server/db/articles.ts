@@ -178,7 +178,8 @@ export function getArticles(opts: {
   const articles = allNamed<ArticleListItem>(`
     SELECT a.id, a.feed_id, f.name AS feed_name,
            a.title, a.url, a.published_at, a.lang, a.summary, a.excerpt, a.og_image, a.seen_at, a.read_at, a.bookmarked_at, a.liked_at,
-           a.score
+           a.score,
+           (SELECT COUNT(*) FROM article_similarities WHERE article_id = a.id) AS similar_count
     FROM articles a
     JOIN feeds f ON a.feed_id = f.id
     ${where}
@@ -194,7 +195,8 @@ export function getArticleByUrl(url: string): ArticleDetail | undefined {
     SELECT a.id, a.feed_id, f.name AS feed_name, f.type AS feed_type,
            a.title, a.url, a.published_at, a.lang, a.summary, a.excerpt, a.og_image,
            a.full_text, a.full_text_translated, a.translated_lang, a.seen_at, a.read_at, a.bookmarked_at, a.liked_at,
-           a.images_archived_at
+           a.images_archived_at,
+           (SELECT COUNT(*) FROM article_similarities WHERE article_id = a.id) AS similar_count
     FROM articles a
     JOIN feeds f ON a.feed_id = f.id
     WHERE a.url = ?
@@ -206,7 +208,8 @@ export function getArticleById(id: number): ArticleDetail | undefined {
     SELECT a.id, a.feed_id, f.name AS feed_name, f.type AS feed_type,
            a.title, a.url, a.published_at, a.lang, a.summary, a.excerpt, a.og_image,
            a.full_text, a.full_text_translated, a.translated_lang, a.seen_at, a.read_at, a.bookmarked_at, a.liked_at,
-           a.images_archived_at
+           a.images_archived_at,
+           (SELECT COUNT(*) FROM article_similarities WHERE article_id = a.id) AS similar_count
     FROM articles a
     JOIN feeds f ON a.feed_id = f.id
     WHERE a.id = ?
