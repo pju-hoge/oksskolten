@@ -116,7 +116,7 @@ describe('SearchDialog', () => {
   it('shows no results message after empty search', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ articles: [] }),
+      json: async () => ({ articles: [], has_more: false }),
     })
     vi.stubGlobal('fetch', mockFetch)
 
@@ -124,6 +124,11 @@ describe('SearchDialog', () => {
     const input = getInput()
 
     await userEvent.type(input, 'nonexistent')
+
+    // Wait for the debounced fetch to fire first
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled()
+    })
 
     await waitFor(() => {
       expect(screen.getByText('No matching articles')).toBeTruthy()
