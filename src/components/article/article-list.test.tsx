@@ -74,10 +74,11 @@ vi.mock('../../contexts/fetch-progress-context', () => ({
   }),
 }))
 
+const noopSetFocusedItemId = () => {}
 vi.mock('../../contexts/keyboard-navigation-context', () => ({
   useKeyboardNavigationContext: () => ({
     focusedItemId: null,
-    setFocusedItemId: vi.fn(),
+    setFocusedItemId: noopSetFocusedItemId,
   }),
 }))
 
