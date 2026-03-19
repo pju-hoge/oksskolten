@@ -759,9 +759,10 @@ describe('fetchAllFeeds', () => {
     await expect(fetchAllFeeds()).resolves.toBeUndefined()
   })
 
-  it('retry: skips fetchFullText when article already has full_text', async () => {
+  it('retry: excludes article with full_text from retry candidates', async () => {
     const feed = seedFeed()
-    // Insert article with full_text but with last_error (retry candidate)
+    // Insert article with full_text but with last_error — not a retry candidate
+    // because getRetryArticles() now requires full_text IS NULL
     insertArticle({
       feed_id: feed.id,
       title: 'Has Text',
@@ -782,16 +783,16 @@ describe('fetchAllFeeds', () => {
 
     await fetchAllFeeds()
 
-    // Should NOT have fetched the article URL (full_text already exists)
+    // Should NOT have fetched the article URL (not a retry candidate)
     const fetchedUrls = mockFetch.mock.calls.map((c: unknown[]) => (c[0] as string).toString())
     expect(fetchedUrls).not.toContain('https://example.com/has-text')
 
-    // Article should retain og_image from retry path
+    // Article retains original state — last_error is NOT cleared since it was never retried
     const { getDb } = await import('./db.js')
     const row = getDb().prepare('SELECT full_text, og_image, last_error FROM articles WHERE url = ?').get('https://example.com/has-text') as { full_text: string; og_image: string; last_error: string | null }
     expect(row.full_text).toBe('existing content')
     expect(row.og_image).toBe('https://example.com/img.jpg')
-    expect(row.last_error).toBeNull()
+    expect(row.last_error).toBe('summary: failed')
   })
 
   it('retry: preserves existing lang', async () => {
@@ -2541,5 +2542,99 @@ describe('fetchFeedTitle — feed.title fallback', () => {
 
     const result = await discoverRssUrl('https://example.com/')
     expect(result.title).toBe('Nested Title')
+  })
+})
+
+// --- Phase B retry backoff ---
+
+describe('fetchAllFeeds — retry backoff', () => {
+  let fetchAllFeeds: typeof import('./fetcher.js').fetchAllFeeds
+
+  beforeEach(async () => {
+    const mod = await import('./fetcher.js')
+    fetchAllFeeds = mod.fetchAllFeeds
+  })
+
+  it('increments retry_count on failure', async () => {
+    const feed = seedFeed()
+    insertArticle({
+      feed_id: feed.id,
+      title: 'Fail Me',
+      url: 'https://example.com/fail',
+      published_at: '2024-01-01T00:00:00Z',
+      last_error: 'previous error',
+    })
+
+    const rssXml = rss20Xml('Test', [])
+    mockFetch.mockImplementation((url: string | URL) => {
+      const u = url.toString()
+      if (u === feed.rss_url) return Promise.resolve(mockResponse(rssXml, { headers: { 'content-type': 'application/rss+xml' } }))
+      if (u === 'https://example.com/fail') return Promise.resolve(mockResponse('Server Error', { status: 500 }))
+      return Promise.resolve(mockResponse('', { status: 404 }))
+    })
+
+    await fetchAllFeeds()
+
+    const { getDb } = await import('./db.js')
+    const row = getDb().prepare('SELECT retry_count, last_retry_at FROM articles WHERE url = ?').get('https://example.com/fail') as { retry_count: number; last_retry_at: string | null }
+    expect(row.retry_count).toBe(1)
+    expect(row.last_retry_at).not.toBeNull()
+  })
+
+  it('sets last_retry_at before processing', async () => {
+    const feed = seedFeed()
+    insertArticle({
+      feed_id: feed.id,
+      title: 'Retry Timing',
+      url: 'https://example.com/timing',
+      published_at: '2024-01-01T00:00:00Z',
+      last_error: 'fetch error',
+    })
+
+    const rssXml = rss20Xml('Test', [])
+    const html = articleHtml({ title: 'Retry Timing' })
+    mockFetch.mockImplementation((url: string | URL) => {
+      const u = url.toString()
+      if (u === feed.rss_url) return Promise.resolve(mockResponse(rssXml, { headers: { 'content-type': 'application/rss+xml' } }))
+      if (u === 'https://example.com/timing') return Promise.resolve(mockResponse(html))
+      return Promise.resolve(mockResponse('', { status: 404 }))
+    })
+
+    await fetchAllFeeds()
+
+    const { getDb } = await import('./db.js')
+    const row = getDb().prepare('SELECT last_retry_at, last_error FROM articles WHERE url = ?').get('https://example.com/timing') as { last_retry_at: string | null; last_error: string | null }
+    // Success: last_error cleared, but last_retry_at was set before processing
+    expect(row.last_error).toBeNull()
+    expect(row.last_retry_at).not.toBeNull()
+  })
+
+  it('clears last_error on success without resetting retry_count', async () => {
+    const feed = seedFeed()
+    const id = insertArticle({
+      feed_id: feed.id,
+      title: 'Success',
+      url: 'https://example.com/success',
+      published_at: '2024-01-01T00:00:00Z',
+      last_error: 'fetch error',
+    })
+
+    const { getDb } = await import('./db.js')
+    getDb().prepare('UPDATE articles SET retry_count = 2 WHERE id = ?').run(id)
+
+    const rssXml = rss20Xml('Test', [])
+    const html = articleHtml({ title: 'Success' })
+    mockFetch.mockImplementation((url: string | URL) => {
+      const u = url.toString()
+      if (u === feed.rss_url) return Promise.resolve(mockResponse(rssXml, { headers: { 'content-type': 'application/rss+xml' } }))
+      if (u === 'https://example.com/success') return Promise.resolve(mockResponse(html))
+      return Promise.resolve(mockResponse('', { status: 404 }))
+    })
+
+    await fetchAllFeeds()
+
+    const row = getDb().prepare('SELECT retry_count, last_error FROM articles WHERE url = ?').get('https://example.com/success') as { retry_count: number; last_error: string | null }
+    expect(row.last_error).toBeNull()
+    expect(row.retry_count).toBe(2) // Not reset
   })
 })

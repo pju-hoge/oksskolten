@@ -2,6 +2,7 @@ import {
   getEnabledFeeds,
   getExistingArticleUrls,
   getRetryArticles,
+  getRetryStats,
   insertArticle,
   updateArticleContent,
   updateFeedError,
@@ -167,6 +168,7 @@ async function processArticle(task: ArticleTask): Promise<void> {
       excerpt: content.excerpt,
       og_image: content.ogImage,
       last_error: content.lastError,
+      ...(content.lastError ? { retry_count: (task.article.retry_count ?? 0) + 1 } : {}),
     })
   }
 }
@@ -338,9 +340,14 @@ export async function fetchAllFeeds(
     ),
   )
 
-  // Phase B: Add retry candidates
+  // Phase B: Add retry candidates with backoff
+  const retryStats = getRetryStats()
+  if (retryStats.eligible > 0 || retryStats.backoff_waiting > 0 || retryStats.exceeded > 0) {
+    log.info(`Retry: ${retryStats.eligible} eligible, ${retryStats.backoff_waiting} backoff-waiting, ${retryStats.exceeded} exceeded max attempts`)
+  }
   const retryArticles = getRetryArticles()
   for (const article of retryArticles) {
+    updateArticleContent(article.id, { last_retry_at: new Date().toISOString() })
     allTasks.push({ kind: 'retry', article })
   }
 

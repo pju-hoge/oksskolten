@@ -132,6 +132,8 @@ CREATE TABLE articles (
   excerpt         TEXT,                               -- 200文字プレビュー（full_textから自動生成）
   og_image        TEXT,                               -- OGP画像URL
   last_error      TEXT,                               -- fetch/Claude APIエラー
+  retry_count     INTEGER NOT NULL DEFAULT 0,         -- full_text取得のリトライ回数（exponential backoff用）
+  last_retry_at   TEXT,                               -- 最後にリトライした日時（ISO 8601）
   fetched_at      TEXT NOT NULL DEFAULT (datetime('now')),
   seen_at         TEXT,                               -- 認知日時（スクロール通過 or 記事を開く、初回のみ）
   read_at         TEXT,                               -- 実際に読んだ日時（記事を開くたびに上書き）

@@ -50,6 +50,8 @@ export interface Article {
   summary: string | null
   og_image: string | null
   last_error: string | null
+  retry_count: number
+  last_retry_at: string | null
   fetched_at: string
   seen_at: string | null
   read_at: string | null

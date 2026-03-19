@@ -132,6 +132,8 @@ CREATE TABLE articles (
   excerpt         TEXT,                               -- 200-char preview (auto-generated from full_text)
   og_image        TEXT,                               -- OGP image URL
   last_error      TEXT,                               -- Fetch / Claude API error
+  retry_count     INTEGER NOT NULL DEFAULT 0,         -- full_text fetch retry count (for exponential backoff)
+  last_retry_at   TEXT,                               -- Last retry timestamp (ISO 8601)
   fetched_at      TEXT NOT NULL DEFAULT (datetime('now')),
   seen_at         TEXT,                               -- Awareness timestamp (scroll-past or article open, first time only)
   read_at         TEXT,                               -- Actual read timestamp (overwritten each time the article is opened)

@@ -2,6 +2,7 @@ import { getDb, runNamed, getNamed, allNamed } from './connection.js'
 import type { Article, ArticleListItem, ArticleDetail } from './types.js'
 import type { MeiliArticleDoc } from '../search/client.js'
 import { syncArticleToSearch, deleteArticleFromSearch, syncArticleScoreToSearch, syncArticleFiltersToSearch } from '../search/sync.js'
+import { RETRY_MAX_ATTEMPTS, RETRY_BATCH_LIMIT } from '../fetcher/util.js'
 
 function buildMeiliDoc(id: number): MeiliArticleDoc | null {
   const row = getDb().prepare(`
@@ -370,6 +371,8 @@ export function updateArticleContent(
     excerpt?: string | null
     og_image?: string | null
     last_error?: string | null
+    retry_count?: number
+    last_retry_at?: string | null
   },
 ): void {
   const fields: string[] = []
@@ -396,13 +399,50 @@ export function getExistingArticleUrls(urls: string[]): Set<string> {
   return new Set(rows.map(r => r.url))
 }
 
-export function getRetryArticles(): Article[] {
+export function getRetryArticles(
+  maxAttempts = RETRY_MAX_ATTEMPTS,
+  batchLimit = RETRY_BATCH_LIMIT,
+): Article[] {
   return getDb().prepare(`
     SELECT * FROM articles
     WHERE last_error IS NOT NULL
-      AND (full_text IS NULL OR summary IS NULL
-           OR full_text_translated IS NULL)
-  `).all() as Article[]
+      AND full_text IS NULL
+      AND retry_count < :max_attempts
+      AND (
+        last_retry_at IS NULL
+        OR datetime(last_retry_at, '+' || (30 * (1 << MIN(retry_count, 6))) || ' minutes') <= datetime('now')
+      )
+    ORDER BY retry_count ASC, last_retry_at ASC
+    LIMIT :batch_limit
+  `).all({ max_attempts: maxAttempts, batch_limit: batchLimit }) as Article[]
+}
+
+export interface RetryStats {
+  eligible: number
+  backoff_waiting: number
+  exceeded: number
+}
+
+export function getRetryStats(maxAttempts = RETRY_MAX_ATTEMPTS): RetryStats {
+  const row = getDb().prepare(`
+    SELECT
+      SUM(CASE WHEN retry_count < :max_attempts AND (
+        last_retry_at IS NULL
+        OR datetime(last_retry_at, '+' || (30 * (1 << MIN(retry_count, 6))) || ' minutes') <= datetime('now')
+      ) THEN 1 ELSE 0 END) AS eligible,
+      SUM(CASE WHEN retry_count < :max_attempts AND
+        last_retry_at IS NOT NULL AND
+        datetime(last_retry_at, '+' || (30 * (1 << MIN(retry_count, 6))) || ' minutes') > datetime('now')
+      THEN 1 ELSE 0 END) AS backoff_waiting,
+      SUM(CASE WHEN retry_count >= :max_attempts THEN 1 ELSE 0 END) AS exceeded
+    FROM articles
+    WHERE last_error IS NOT NULL AND full_text IS NULL
+  `).get({ max_attempts: maxAttempts }) as { eligible: number | null; backoff_waiting: number | null; exceeded: number | null }
+  return {
+    eligible: row.eligible ?? 0,
+    backoff_waiting: row.backoff_waiting ?? 0,
+    exceeded: row.exceeded ?? 0,
+  }
 }
 
 // --- Search by IDs (Meilisearch integration) ---

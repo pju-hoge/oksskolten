@@ -12,6 +12,8 @@ import {
   recordArticleRead,
   updateArticleContent,
   recalculateScores,
+  getRetryArticles,
+  getRetryStats,
 } from '../db.js'
 import { createFeed, createCategory, getDb } from '../db.js'
 
@@ -686,5 +688,129 @@ describe('getArticles smartFloor', () => {
     const { articles } = getArticles({ feedId: feed.id, smartFloor: true, limit: 100, offset: 0 })
     const urls = articles.map(a => a.url)
     expect(urls).toContain('https://example.com/null-date')
+  })
+})
+
+// --- getRetryArticles ---
+
+describe('getRetryArticles', () => {
+  it('returns articles with last_error and no full_text', () => {
+    const feed = seedFeed()
+    seedArticle(feed.id, { url: 'https://example.com/err1', last_error: 'fetch failed' })
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(1)
+  })
+
+  it('excludes articles with full_text even if last_error is set', () => {
+    const feed = seedFeed()
+    seedArticle(feed.id, { url: 'https://example.com/partial', full_text: 'partial content', last_error: 'Turndown failed' })
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(0)
+  })
+
+  it('excludes articles where only summary is NULL (full_text exists)', () => {
+    const feed = seedFeed()
+    seedArticle(feed.id, { url: 'https://example.com/no-summary', full_text: 'body text', last_error: 'summary error' })
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(0)
+  })
+
+  it('excludes articles exceeding max retry attempts', () => {
+    const feed = seedFeed()
+    const id = seedArticle(feed.id, { url: 'https://example.com/maxed', last_error: 'fail' })
+    getDb().prepare('UPDATE articles SET retry_count = 5 WHERE id = ?').run(id)
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(0)
+  })
+
+  it('excludes articles within backoff period', () => {
+    const feed = seedFeed()
+    const id = seedArticle(feed.id, { url: 'https://example.com/backoff', last_error: 'fail' })
+    // retry_count = 0 → backoff = 30 min. Set last_retry_at to now (within 30 min)
+    getDb().prepare("UPDATE articles SET retry_count = 0, last_retry_at = datetime('now') WHERE id = ?").run(id)
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(0)
+  })
+
+  it('includes articles past backoff period', () => {
+    const feed = seedFeed()
+    const id = seedArticle(feed.id, { url: 'https://example.com/ready', last_error: 'fail' })
+    // retry_count = 0 → backoff = 30 min. Set last_retry_at to 31 min ago
+    getDb().prepare("UPDATE articles SET retry_count = 0, last_retry_at = datetime('now', '-31 minutes') WHERE id = ?").run(id)
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(1)
+  })
+
+  it('includes articles with last_retry_at = NULL (first retry)', () => {
+    const feed = seedFeed()
+    seedArticle(feed.id, { url: 'https://example.com/first', last_error: 'fail' })
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(1)
+  })
+
+  it('respects batch limit', () => {
+    const feed = seedFeed()
+    for (let i = 0; i < 10; i++) {
+      seedArticle(feed.id, { url: `https://example.com/batch-${i}`, last_error: 'fail' })
+    }
+
+    const results = getRetryArticles()
+    expect(results).toHaveLength(3) // RETRY_BATCH_LIMIT default = 3
+  })
+
+  it('sorts by retry_count ASC then last_retry_at ASC', () => {
+    const feed = seedFeed()
+    const id1 = seedArticle(feed.id, { url: 'https://example.com/r2', last_error: 'fail' })
+    seedArticle(feed.id, { url: 'https://example.com/r0', last_error: 'fail' })
+    const id3 = seedArticle(feed.id, { url: 'https://example.com/r1', last_error: 'fail' })
+    // id1: retry_count=2, old retry
+    getDb().prepare("UPDATE articles SET retry_count = 2, last_retry_at = datetime('now', '-5 hours') WHERE id = ?").run(id1)
+    // id2: retry_count=0, no retry yet
+    // id3: retry_count=1, old retry
+    getDb().prepare("UPDATE articles SET retry_count = 1, last_retry_at = datetime('now', '-2 hours') WHERE id = ?").run(id3)
+
+    const results = getRetryArticles()
+    expect(results.map(r => r.url)).toEqual([
+      'https://example.com/r0', // retry_count=0
+      'https://example.com/r1', // retry_count=1
+      'https://example.com/r2', // retry_count=2
+    ])
+  })
+})
+
+// --- getRetryStats ---
+
+describe('getRetryStats', () => {
+  it('returns zeros when no retry candidates exist', () => {
+    const stats = getRetryStats()
+    expect(stats.eligible).toBe(0)
+    expect(stats.backoff_waiting).toBe(0)
+    expect(stats.exceeded).toBe(0)
+  })
+
+  it('counts eligible, backoff-waiting, and exceeded correctly', () => {
+    const feed = seedFeed()
+    // eligible: last_error set, no full_text, retry_count=0, no last_retry_at
+    seedArticle(feed.id, { url: 'https://example.com/e1', last_error: 'fail' })
+
+    // backoff-waiting: retry_count=1, last_retry_at = now (within 60min backoff)
+    const id2 = seedArticle(feed.id, { url: 'https://example.com/bw1', last_error: 'fail' })
+    getDb().prepare("UPDATE articles SET retry_count = 1, last_retry_at = datetime('now') WHERE id = ?").run(id2)
+
+    // exceeded: retry_count=5 (>= RETRY_MAX_ATTEMPTS default)
+    const id3 = seedArticle(feed.id, { url: 'https://example.com/ex1', last_error: 'fail' })
+    getDb().prepare('UPDATE articles SET retry_count = 5 WHERE id = ?').run(id3)
+
+    const stats = getRetryStats()
+    expect(stats.eligible).toBe(1)
+    expect(stats.backoff_waiting).toBe(1)
+    expect(stats.exceeded).toBe(1)
   })
 })

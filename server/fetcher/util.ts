@@ -1,4 +1,6 @@
 export const CONCURRENCY = Number(process.env.FETCH_CONCURRENCY) || 5
+export const RETRY_MAX_ATTEMPTS = Number(process.env.RETRY_MAX_ATTEMPTS) || 5
+export const RETRY_BATCH_LIMIT = Number(process.env.RETRY_BATCH_LIMIT) || 3
 
 export class Semaphore {
   private queue: (() => void)[] = []
