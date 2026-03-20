@@ -13,8 +13,8 @@ export interface FetchHtmlResult {
 }
 
 /**
- * Content-Type ヘッダーから charset を抽出する。
- * 例: "text/html; charset=Shift_JIS" → "shift_jis"
+ * Extract charset from a Content-Type header.
+ * e.g. "text/html; charset=Shift_JIS" → "shift_jis"
  */
 function charsetFromContentType(ct: string): string | null {
   const m = ct.match(/charset\s*=\s*"?([^"\s;]+)/i)
@@ -22,14 +22,14 @@ function charsetFromContentType(ct: string): string | null {
 }
 
 /**
- * バイト列の先頭部分からエンコーディング宣言を検出する。
+ * Detect encoding declaration from the beginning of a byte sequence.
  * HTML: <meta charset="..."> / <meta http-equiv="Content-Type" content="...; charset=...">
  * XML:  <?xml version="1.0" encoding="..."?>
- * BOM やバイナリヘッダーに影響されないよう、ASCII 互換部分のみを走査する。
+ * Only scans ASCII-compatible portions to avoid being affected by BOM or binary headers.
  */
 function charsetFromBytes(buf: Uint8Array): string | null {
-  // 先頭 2048 バイトを ASCII として読み取る（マルチバイト文字は化けるが、
-  // charset 宣言自体は ASCII 範囲なので問題ない）
+  // Read the first 2048 bytes as ASCII (multibyte chars will be garbled,
+  // but charset declarations are in the ASCII range so this is fine)
   const head = new TextDecoder('ascii', { fatal: false }).decode(buf.slice(0, 2048))
   // XML: <?xml version="1.0" encoding="Shift_JIS"?>
   const mx = head.match(/<\?xml\s[^?]*encoding\s*=\s*["']([^"']+)/i)
@@ -44,26 +44,26 @@ function charsetFromBytes(buf: Uint8Array): string | null {
 }
 
 /**
- * レスポンスボディをエンコーディングを検出してデコードする。
- * 優先順: Content-Type charset → HTML meta charset → UTF-8 フォールバック
+ * Decode response body with auto-detected encoding.
+ * Priority: Content-Type charset → HTML meta charset → UTF-8 fallback
  */
 export async function decodeResponse(res: Response): Promise<string> {
   const ct = res.headers.get('content-type') || ''
   const headerCharset = charsetFromContentType(ct)
 
-  // Content-Type に charset が明示されていて UTF-8 なら、res.text() で高速処理
+  // Content-Type explicitly specifies UTF-8 — use res.text() for fast path
   if (headerCharset && /^utf-?8$/i.test(headerCharset)) {
     return res.text()
   }
 
-  // charset が不明 or 非 UTF-8 → バイナリで受け取って検出
+  // charset unknown or non-UTF-8 → read as binary and detect
   const buf = new Uint8Array(await res.arrayBuffer())
   const charset = headerCharset || charsetFromBytes(buf) || 'utf-8'
 
   try {
     return new TextDecoder(charset, { fatal: false }).decode(buf)
   } catch {
-    // 未知の charset ラベルの場合は UTF-8 フォールバック
+    // Fall back to UTF-8 for unknown charset labels
     return new TextDecoder('utf-8', { fatal: false }).decode(buf)
   }
 }

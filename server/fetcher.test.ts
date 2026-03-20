@@ -150,6 +150,7 @@ function mockResponse(body: string, init?: { status?: number; headers?: Record<s
     headers: new Headers(init?.headers || { 'content-type': 'text/html' }),
     text: () => Promise.resolve(body),
     json: () => Promise.resolve(JSON.parse(body)),
+    arrayBuffer: () => Promise.resolve(new TextEncoder().encode(body).buffer),
   } as Response
 }
 
