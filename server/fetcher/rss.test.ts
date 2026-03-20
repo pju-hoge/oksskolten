@@ -134,6 +134,7 @@ function mockResponse(body: string, ok = true, status = 200, contentType = 'appl
     ok,
     status,
     text: async () => body,
+    arrayBuffer: async () => new TextEncoder().encode(body).buffer,
     headers: new Headers({ 'content-type': contentType }),
   }
 }

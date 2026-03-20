@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { JSDOM } from 'jsdom'
 import type { Feed } from '../db.js'
 import { normalizeDate } from './util.js'
-import { fetchHtml, USER_AGENT, DEFAULT_TIMEOUT, DISCOVERY_TIMEOUT, PROBE_TIMEOUT } from './http.js'
+import { fetchHtml, decodeResponse, USER_AGENT, DEFAULT_TIMEOUT, DISCOVERY_TIMEOUT, PROBE_TIMEOUT } from './http.js'
 import { safeFetch } from './ssrf.js'
 import { fetchViaFlareSolverr } from './flaresolverr.js'
 import { parseHttpCacheInterval, parseRssTtl } from './schedule.js'
@@ -174,7 +174,7 @@ export async function fetchAndParseRss(feed: Feed, opts?: { skipCache?: boolean 
         if (!flare) throw new Error(`HTTP ${res.status}`)
         xml = extractRssFromFlareSolverr(flare.body)
       } else {
-        xml = await res.text()
+        xml = await decodeResponse(res)
       }
     } else {
       // External URL: use safeFetch with conditional headers
@@ -203,7 +203,7 @@ export async function fetchAndParseRss(feed: Feed, opts?: { skipCache?: boolean 
           if (!flare) throw new Error(`HTTP ${res.status}`)
           xml = extractRssFromFlareSolverr(flare.body)
         } else {
-          xml = await res.text()
+          xml = await decodeResponse(res)
         }
       } catch (err) {
         if (isCssBridge) {

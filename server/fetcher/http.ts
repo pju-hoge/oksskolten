@@ -13,6 +13,62 @@ export interface FetchHtmlResult {
 }
 
 /**
+ * Extract charset from a Content-Type header.
+ * e.g. "text/html; charset=Shift_JIS" → "shift_jis"
+ */
+function charsetFromContentType(ct: string): string | null {
+  const m = ct.match(/charset\s*=\s*"?([^"\s;]+)/i)
+  return m ? m[1].toLowerCase() : null
+}
+
+/**
+ * Detect encoding declaration from the beginning of a byte sequence.
+ * HTML: <meta charset="..."> / <meta http-equiv="Content-Type" content="...; charset=...">
+ * XML:  <?xml version="1.0" encoding="..."?>
+ * Only scans ASCII-compatible portions to avoid being affected by BOM or binary headers.
+ */
+function charsetFromBytes(buf: Uint8Array): string | null {
+  // Read the first 2048 bytes as ASCII (multibyte chars will be garbled,
+  // but charset declarations are in the ASCII range so this is fine)
+  const head = new TextDecoder('ascii', { fatal: false }).decode(buf.slice(0, 2048))
+  // XML: <?xml version="1.0" encoding="Shift_JIS"?>
+  const mx = head.match(/<\?xml\s[^?]*encoding\s*=\s*["']([^"']+)/i)
+  if (mx) return mx[1].toLowerCase()
+  // HTML: <meta charset="Shift_JIS">
+  const m1 = head.match(/<meta\s[^>]*charset\s*=\s*"?([^"\s;>]+)/i)
+  if (m1) return m1[1].toLowerCase()
+  // HTML: <meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+  const m2 = head.match(/<meta\s[^>]*http-equiv\s*=\s*"?Content-Type"?[^>]*content\s*=\s*"[^"]*charset=([^"\s;]+)/i)
+  if (m2) return m2[1].toLowerCase()
+  return null
+}
+
+/**
+ * Decode response body with auto-detected encoding.
+ * Priority: Content-Type charset → HTML meta charset → UTF-8 fallback
+ */
+export async function decodeResponse(res: Response): Promise<string> {
+  const ct = res.headers.get('content-type') || ''
+  const headerCharset = charsetFromContentType(ct)
+
+  // Content-Type explicitly specifies UTF-8 — use res.text() for fast path
+  if (headerCharset && /^utf-?8$/i.test(headerCharset)) {
+    return res.text()
+  }
+
+  // charset unknown or non-UTF-8 → read as binary and detect
+  const buf = new Uint8Array(await res.arrayBuffer())
+  const charset = headerCharset || charsetFromBytes(buf) || 'utf-8'
+
+  try {
+    return new TextDecoder(charset, { fatal: false }).decode(buf)
+  } catch {
+    // Fall back to UTF-8 for unknown charset labels
+    return new TextDecoder('utf-8', { fatal: false }).decode(buf)
+  }
+}
+
+/**
  * Fetch HTML from an external URL with safeFetch (SSRF-protected) + FlareSolverr fallback.
  * For internal URLs (e.g. RSS Bridge), use plain fetch() directly instead.
  */
@@ -49,7 +105,7 @@ export async function fetchHtml(url: string, opts?: {
   }
 
   return {
-    html: await res.text(),
+    html: await decodeResponse(res),
     contentType: res.headers.get('content-type') || '',
     usedFlareSolverr: false,
   }

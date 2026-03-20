@@ -44,6 +44,7 @@ describe('fetchHtml', () => {
     mockSafeFetch.mockResolvedValue({
       ok: true,
       text: async () => '<html>ok</html>',
+      arrayBuffer: async () => new TextEncoder().encode('<html>ok</html>').buffer,
       headers: new Headers({ 'content-type': 'text/html' }),
     })
 
@@ -57,6 +58,7 @@ describe('fetchHtml', () => {
     mockSafeFetch.mockResolvedValue({
       ok: true,
       text: async () => '',
+      arrayBuffer: async () => new TextEncoder().encode('').buffer,
       headers: new Headers(),
     })
 
@@ -112,6 +114,7 @@ describe('fetchHtml', () => {
     mockSafeFetch.mockResolvedValue({
       ok: true,
       text: async () => '',
+      arrayBuffer: async () => new TextEncoder().encode('').buffer,
       headers: new Headers(),
     })
 
@@ -125,6 +128,7 @@ describe('fetchHtml', () => {
     mockSafeFetch.mockResolvedValue({
       ok: true,
       text: async () => '',
+      arrayBuffer: async () => new TextEncoder().encode('').buffer,
       headers: new Headers(), // no content-type
     })
 
