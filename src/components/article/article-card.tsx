@@ -119,17 +119,18 @@ function useCardBase(article: ArticleListItem, dateMode: 'relative' | 'absolute'
     void navigate(href)
   }
 
-  return { isUnread, domain, dateText, href, handleClick }
+  return { isUnread, domain, dateText, href, handleClick, originalUrl: article.url }
 }
 
 /** List layout — classic single-column (current default) */
 function ListCard({ article, dateMode, indicatorStyle, showUnreadIndicator, showThumbnails, onClick }: ArticleCardProps) {
-  const { isUnread, domain, dateText, href, handleClick } = useCardBase(article, dateMode, onClick)
+  const { isUnread, domain, dateText, href, handleClick, originalUrl } = useCardBase(article, dateMode, onClick)
   const showIndicator = isUnread && showUnreadIndicator
 
   return (
     <a
       href={href}
+      data-original-url={originalUrl}
       onClick={handleClick}
       className={`article-card block w-full text-left border-b border-border py-3 px-4 md:px-6 transition-[background-color,transform,box-shadow,border-color] duration-100 hover:bg-hover hover:-translate-y-px hover:shadow-sm select-none no-underline text-inherit ${
         indicatorStyle === 'line'
@@ -181,11 +182,12 @@ function ListCard({ article, dateMode, indicatorStyle, showUnreadIndicator, show
 
 /** Card layout — image-forward grid card */
 function GridCard({ article, dateMode, showThumbnails, onClick }: ArticleCardProps) {
-  const { isUnread, domain, dateText, href, handleClick } = useCardBase(article, dateMode, onClick)
+  const { isUnread, domain, dateText, href, handleClick, originalUrl } = useCardBase(article, dateMode, onClick)
 
   return (
     <a
       href={href}
+      data-original-url={originalUrl}
       onClick={handleClick}
       className="article-card block border border-border rounded-lg overflow-hidden transition-[background-color,transform,box-shadow] duration-100 hover:bg-hover hover:-translate-y-px hover:shadow-sm select-none no-underline text-inherit"
     >
@@ -226,11 +228,12 @@ function GridCard({ article, dateMode, showThumbnails, onClick }: ArticleCardPro
 
 /** Magazine layout — hero card (large) */
 function HeroCard({ article, dateMode, showThumbnails, onClick }: ArticleCardProps) {
-  const { isUnread, domain, dateText, href, handleClick } = useCardBase(article, dateMode, onClick)
+  const { isUnread, domain, dateText, href, handleClick, originalUrl } = useCardBase(article, dateMode, onClick)
 
   return (
     <a
       href={href}
+      data-original-url={originalUrl}
       onClick={handleClick}
       className="article-card block border border-border rounded-lg overflow-hidden transition-[background-color,transform,box-shadow] duration-100 hover:bg-hover hover:-translate-y-px hover:shadow-sm select-none no-underline text-inherit mb-4"
     >
@@ -271,11 +274,12 @@ function HeroCard({ article, dateMode, showThumbnails, onClick }: ArticleCardPro
 
 /** Magazine layout — small card (below hero) */
 function SmallCard({ article, dateMode, showThumbnails, onClick }: ArticleCardProps) {
-  const { isUnread, domain, dateText, href, handleClick } = useCardBase(article, dateMode, onClick)
+  const { isUnread, domain, dateText, href, handleClick, originalUrl } = useCardBase(article, dateMode, onClick)
 
   return (
     <a
       href={href}
+      data-original-url={originalUrl}
       onClick={handleClick}
       className="article-card flex gap-3 border-b border-border py-2 px-4 md:px-6 transition-[background-color,transform,box-shadow] duration-100 hover:bg-hover hover:-translate-y-px hover:shadow-sm select-none no-underline text-inherit"
     >
@@ -316,12 +320,13 @@ function SmallCard({ article, dateMode, showThumbnails, onClick }: ArticleCardPr
 
 /** Compact layout — title and date only */
 function CompactCard({ article, dateMode, indicatorStyle, showUnreadIndicator, onClick }: ArticleCardProps) {
-  const { isUnread, dateText, href, handleClick } = useCardBase(article, dateMode, onClick)
+  const { isUnread, dateText, href, handleClick, originalUrl } = useCardBase(article, dateMode, onClick)
   const showIndicator = isUnread && showUnreadIndicator
 
   return (
     <a
       href={href}
+      data-original-url={originalUrl}
       onClick={handleClick}
       className={`article-card block w-full text-left border-b border-border py-1.5 px-4 md:px-6 transition-[background-color,border-color] duration-100 hover:bg-hover select-none no-underline text-inherit ${
         indicatorStyle === 'line'
