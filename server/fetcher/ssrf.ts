@@ -39,13 +39,16 @@ export async function assertSafeUrl(url: string): Promise<void> {
 }
 
 const MAX_REDIRECTS = 5
+// Only actual redirect statuses per RFC 7231/7538.
+// Excludes 300 (Multiple Choices) and 304 (Not Modified).
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
 export async function safeFetch(url: string, init?: RequestInit): Promise<Response> {
   await assertSafeUrl(url)
   let currentUrl = url
   for (let i = 0; i < MAX_REDIRECTS; i++) {
     const res = await fetch(currentUrl, { ...init, redirect: 'manual' })
-    if (res.status >= 300 && res.status < 400) {
+    if (REDIRECT_STATUSES.has(res.status)) {
       const location = res.headers.get('location')
       if (!location) throw new Error(`Redirect without Location header from ${currentUrl}`)
       currentUrl = new URL(location, currentUrl).href

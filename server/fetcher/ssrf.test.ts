@@ -184,6 +184,20 @@ describe('safeFetch', () => {
     )
   })
 
+  it('passes through 304 Not Modified without treating it as a redirect', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 304 }))
+    const res = await safeFetch('http://example.com')
+    expect(res.status).toBe(304)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes through 300 Multiple Choices without treating it as a redirect', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('choices', { status: 300 }))
+    const res = await safeFetch('http://example.com')
+    expect(res.status).toBe(300)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('validates each hop in a redirect chain', async () => {
     mockFetch
       .mockResolvedValueOnce(
