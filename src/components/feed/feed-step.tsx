@@ -117,6 +117,7 @@ export function FeedStep({ onClose, onCreated, onFetchStarted, categories }: Fee
   const [name, setName] = useState('')
   const [nameManuallySet, setNameManuallySet] = useState(false)
   const [url, setUrl] = useState('')
+  const [skipRssDiscovery, setSkipRssDiscovery] = useState(false)
   const [categoryId, setCategoryId] = useState<number | ''>('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -184,6 +185,7 @@ export function FeedStep({ onClose, onCreated, onFetchStarted, categories }: Fee
           name: name.trim() || undefined,
           url: url.trim(),
           category_id: categoryId || null,
+          skip_rss_discovery: skipRssDiscovery || undefined,
         }),
       })
 
@@ -301,6 +303,15 @@ export function FeedStep({ onClose, onCreated, onFetchStarted, categories }: Fee
           </SelectContent>
         </Select>
       )}
+      <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={skipRssDiscovery}
+          onChange={e => setSkipRssDiscovery(e.target.checked)}
+          className="accent-accent"
+        />
+        {t('modal.skipRssDiscovery')}
+      </label>
       {error && <p className="text-xs text-error">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>

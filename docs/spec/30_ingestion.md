@@ -411,6 +411,8 @@ flowchart TD
 
 For sites where both RSS auto-discovery and RSS Bridge findfeed fail (e.g., claude.com/blog), the LLM infers CSS selectors for article links from the page HTML and automatically generates an RSS Bridge CssSelectorBridge URL.
 
+Users can also force this step by enabling the **"Skip RSS auto-discovery"** toggle in the Add Feed dialog, which bypasses Steps 1–2 entirely. This is useful when a site has a global RSS feed but no per-category or per-page feed (e.g., subscribing to a specific artist page on a music news site).
+
 **Activation conditions**: `RSS_BRIDGE_URL` environment variable is set, and at least one LLM provider API key is configured
 
 **Implementation file**: `server/rss-bridge.ts`

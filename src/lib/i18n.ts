@@ -180,6 +180,7 @@ const dict = {
   'modal.step.found': { ja: '検出', en: 'Found' },
   'modal.step.notFound': { ja: 'この段階では未検出', en: 'Not detected at this step' },
   'modal.step.skipped': { ja: 'スキップ', en: 'Skipped' },
+  'modal.skipRssDiscovery': { ja: 'RSS自動検出をスキップ（LLMセレクター推論を使用）', en: 'Skip RSS auto-discovery (use LLM selector inference)' },
 
   // Settings
   'feeds.dateFormat': { ja: '日付表示', en: 'Date' },

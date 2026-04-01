@@ -41,6 +41,7 @@ const CreateFeedBody = z.object({
   url: httpsUrl,
   name: z.string().optional(),
   category_id: z.number().nullable().optional(),
+  skip_rss_discovery: z.boolean().optional(),
 })
 
 const UpdateFeedBody = z.object({
@@ -93,38 +94,47 @@ export async function feedRoutes(api: FastifyInstance): Promise<void> {
         let discoveredTitle: string | null = null
         let requiresJsChallenge = false
 
-        // Step 1: RSS auto-discovery
-        send({ type: 'step', step: 'rss-discovery', status: 'running' })
-        try {
-          const result = await discoverRssUrl(body.url, {
-            onFlareSolverr: (status, found) => {
-              send({ type: 'step', step: 'flaresolverr', status: status === 'running' ? 'running' : 'done', found })
-            },
-          })
-          rssUrl = result.rssUrl
-          discoveredTitle = result.title
-          if (result.usedFlareSolverr) requiresJsChallenge = true
-          send({ type: 'step', step: 'rss-discovery', status: 'done', found: !!rssUrl })
-        } catch {
-          send({ type: 'step', step: 'rss-discovery', status: 'done', found: false })
-        }
-
-        // Step 2: RSS Bridge fallback
-        if (!rssUrl) {
-          send({ type: 'step', step: 'rss-bridge', status: 'running' })
-          rssBridgeUrl = await queryRssBridge(body.url)
-          send({ type: 'step', step: 'rss-bridge', status: 'done', found: !!rssBridgeUrl })
-        } else {
+        if (body.skip_rss_discovery) {
+          // Skip RSS auto-discovery and RSS Bridge — go straight to LLM selector inference
+          send({ type: 'step', step: 'rss-discovery', status: 'skipped' })
           send({ type: 'step', step: 'rss-bridge', status: 'skipped' })
-        }
-
-        // Step 3: CssSelectorBridge via LLM
-        if (!rssUrl && !rssBridgeUrl) {
           send({ type: 'step', step: 'css-selector', status: 'running' })
           rssBridgeUrl = await inferCssSelectorBridge(body.url)
           send({ type: 'step', step: 'css-selector', status: 'done', found: !!rssBridgeUrl })
         } else {
-          send({ type: 'step', step: 'css-selector', status: 'skipped' })
+          // Step 1: RSS auto-discovery
+          send({ type: 'step', step: 'rss-discovery', status: 'running' })
+          try {
+            const result = await discoverRssUrl(body.url, {
+              onFlareSolverr: (status, found) => {
+                send({ type: 'step', step: 'flaresolverr', status: status === 'running' ? 'running' : 'done', found })
+              },
+            })
+            rssUrl = result.rssUrl
+            discoveredTitle = result.title
+            if (result.usedFlareSolverr) requiresJsChallenge = true
+            send({ type: 'step', step: 'rss-discovery', status: 'done', found: !!rssUrl })
+          } catch {
+            send({ type: 'step', step: 'rss-discovery', status: 'done', found: false })
+          }
+
+          // Step 2: RSS Bridge fallback
+          if (!rssUrl) {
+            send({ type: 'step', step: 'rss-bridge', status: 'running' })
+            rssBridgeUrl = await queryRssBridge(body.url)
+            send({ type: 'step', step: 'rss-bridge', status: 'done', found: !!rssBridgeUrl })
+          } else {
+            send({ type: 'step', step: 'rss-bridge', status: 'skipped' })
+          }
+
+          // Step 3: CssSelectorBridge via LLM
+          if (!rssUrl && !rssBridgeUrl) {
+            send({ type: 'step', step: 'css-selector', status: 'running' })
+            rssBridgeUrl = await inferCssSelectorBridge(body.url)
+            send({ type: 'step', step: 'css-selector', status: 'done', found: !!rssBridgeUrl })
+          } else {
+            send({ type: 'step', step: 'css-selector', status: 'skipped' })
+          }
         }
 
         // If every strategy failed, do not create a feed.

@@ -645,6 +645,7 @@ Response headers:
 | `name` | No | Display name (auto-uses RSS feed title or hostname if omitted) |
 | `rss_bridge_url` | No | URL when using RSSBridge |
 | `category_id` | No | Category ID |
+| `skip_rss_discovery` | No | If `true`, skip RSS auto-discovery (Steps 1–2) and go straight to LLM CSS selector inference (Step 3). Useful for subscribing to specific listing pages on sites that have a global RSS but no per-page feed. |
 
 Processing flow:
 1. Check `url` for duplicates → `409 { "error": "Feed URL already exists" }` on duplicate
