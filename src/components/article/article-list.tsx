@@ -119,14 +119,20 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
   // ---------------------------------------------------------------------------
   // Keyboard navigation
   // ---------------------------------------------------------------------------
-  const { focusedItemId, setFocusedItemId, setArticleIds, setNavigateToArticle } = useKeyboardNavigationContext()
+  const { focusedItemId, setFocusedItemId, setArticleIds, setArticleUrls, setNavigateToArticle } = useKeyboardNavigationContext()
   const isKeyboardNavEnabled = keyboardNavigation === 'on' && !isGridLayout
 
   const articleIds = useMemo(() => articles.map(a => String(a.id)), [articles])
+  const articleUrls = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const a of articles) map[String(a.id)] = a.url
+    return map
+  }, [articles])
 
   useEffect(() => {
     setArticleIds(articleIds)
-  }, [articleIds, setArticleIds])
+    setArticleUrls(articleUrls)
+  }, [articleIds, articleUrls, setArticleIds, setArticleUrls])
 
   const articleMap = useMemo(() => {
     const map = new Map<string, ArticleListItem>()
@@ -143,7 +149,9 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
       if (isOverlayMode) {
         setOverlayUrl(article.url)
       } else {
-        void navigate(`/${encodeURIComponent(article.url)}`)
+        // The /:url route in app.tsx already prepends https:// to the splat
+        const urlWithoutProtocol = article.url.replace(/^https?:\/\//, '')
+        void navigate(`/${encodeURIComponent(urlWithoutProtocol)}`)
       }
     })
   }, [articleMap, isOverlayMode, navigate, setNavigateToArticle])
@@ -166,7 +174,10 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
     onEnter: isOverlayMode ? undefined : (id) => {
       // Page mode: Enter to navigate
       const article = articleMap.get(id)
-      if (article) void navigate(`/${encodeURIComponent(article.url)}`)
+      if (article) {
+        const urlWithoutProtocol = article.url.replace(/^https?:\/\//, '')
+        void navigate(`/${encodeURIComponent(urlWithoutProtocol)}`)
+      }
     },
     onEscape: () => {
       if (escapeDebounceRef.current) return
