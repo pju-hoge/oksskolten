@@ -264,6 +264,7 @@ export function useSettings() {
     syncedSetArticleFont,
     syncedSetMascot,
     syncedSetKeyboardNavigation,
+    syncedSetKeybindings,
     syncedSetChatProvider,
     syncedSetChatModel,
     syncedSetSummaryProvider,
@@ -293,6 +294,12 @@ export function useSettings() {
       syncedSetArticleFont: make<string>('appearance.font_family', setArticleFont),
       syncedSetMascot: make<MascotChoice>('appearance.mascot', setMascot),
       syncedSetKeyboardNavigation: make<'on' | 'off'>('reading.keyboard_navigation', setKeyboardNavigation),
+      syncedSetKeybindings: (value: import('./use-keyboard-navigation').KeyBindings) => {
+        dirtyKeysRef.current.add('reading.keybindings')
+        setKeybindings(value)
+        pendingRef.current['reading.keybindings'] = JSON.stringify(value)
+        scheduleSaveRef.current()
+      },
       syncedSetChatProvider: make<string>('chat.provider', setChatProviderState),
       syncedSetChatModel: make<string>('chat.model', setChatModelState),
       syncedSetSummaryProvider: make<string>('summary.provider', setSummaryProviderState),
@@ -304,14 +311,6 @@ export function useSettings() {
     // scheduleSave and dirtyKeysRef are stable refs; remaining setters are useState/useCallback-stable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setDateMode, setAutoMarkRead, setShowUnreadIndicator, setInternalLinks, setShowThumbnails, setShowFeedActivity, setChatPosition, setArticleOpenMode, setCategoryUnreadOnly, setLayout, setArticleFont, setMascot])
-
-  // Special: keybindings setter serializes to JSON
-  const syncedSetKeybindings = useCallback((value: import('./use-keyboard-navigation').KeyBindings) => {
-    dirtyKeysRef.current.add('reading.keybindings')
-    setKeybindings(value)
-    pendingRef.current['reading.keybindings'] = JSON.stringify(value)
-    scheduleSave()
-  }, [setKeybindings, scheduleSave])
 
   // Special: theme setter updates 2 keys + resets highlight
   const syncedSetTheme = useCallback((name: string) => {
