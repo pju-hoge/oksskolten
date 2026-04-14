@@ -119,7 +119,7 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
   // ---------------------------------------------------------------------------
   // Keyboard navigation
   // ---------------------------------------------------------------------------
-  const { focusedItemId, setFocusedItemId, setArticleIds, setArticleUrls, setNavigateToArticle } = useKeyboardNavigationContext()
+  const { focusedItemId, setFocusedItemId, setArticleIds, setArticleUrls, setNavigateToArticle, setLastListUrl } = useKeyboardNavigationContext()
   const isKeyboardNavEnabled = keyboardNavigation === 'on' && !isGridLayout
 
   const articleIds = useMemo(() => articles.map(a => String(a.id)), [articles])
@@ -133,6 +133,10 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
     setArticleIds(articleIds)
     setArticleUrls(articleUrls)
   }, [articleIds, articleUrls, setArticleIds, setArticleUrls])
+
+  useEffect(() => {
+    setLastListUrl(location.pathname)
+  }, [location.pathname, setLastListUrl])
 
   const articleMap = useMemo(() => {
     const map = new Map<string, ArticleListItem>()
