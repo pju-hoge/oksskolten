@@ -6,11 +6,13 @@ import { useAppLayout } from '../../app'
 
 interface ArticleZapNavigationProps {
   currentArticleId: string
+  onBookmarkToggle?: () => void
+  onOpenExternal?: () => void
 }
 
-export function ArticleZapNavigation({ currentArticleId }: ArticleZapNavigationProps) {
+export function ArticleZapNavigation({ currentArticleId, onBookmarkToggle, onOpenExternal }: ArticleZapNavigationProps) {
   const navigate = useNavigate()
-  const { articleIds, articleUrls, setFocusedItemId, navigateToArticle } = useKeyboardNavigationContext()
+  const { articleIds, articleUrls, setFocusedItemId, navigateToArticle, lastListUrl } = useKeyboardNavigationContext()
   const { settings: { keyboardNavigation, keybindings, articleOpenMode } } = useAppLayout()
 
   const isOverlayMode = articleOpenMode === 'overlay'
@@ -25,24 +27,26 @@ export function ArticleZapNavigation({ currentArticleId }: ArticleZapNavigationP
       const url = articleUrls[id]
       if (url) {
         if (isOverlayMode) {
-          // In overlay mode, we still want the ArticleList's handler if possible,
-          // but we can also fallback to a direct state update if we were to move
-          // overlayUrl to context (not doing that yet to avoid complexity).
           navigateToArticle(id)
         } else {
           const urlWithoutProtocol = url.replace(/^https?:\/\//, '')
           void navigate(`/${encodeURIComponent(urlWithoutProtocol)}`)
         }
       } else {
-        // Fallback to the registered handler
         navigateToArticle(id)
+      }
+    },
+    onBookmarkToggle: onBookmarkToggle ? () => onBookmarkToggle() : undefined,
+    onOpenExternal: onOpenExternal ? () => onOpenExternal() : undefined,
+    onEscape: () => {
+      if (!isOverlayMode) {
+        void navigate(lastListUrl || '/inbox')
       }
     },
     enabled: keyboardNavigation === 'on' && articleIds.length > 0,
     keyBindings: keybindings,
   })
 
-  // Set focused item on mount so j/k knows where we are
   useEffect(() => {
     setFocusedItemId(currentArticleId)
   }, [currentArticleId, setFocusedItemId])
