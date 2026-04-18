@@ -14,7 +14,11 @@ import { ArticleList, type ArticleListHandle } from './components/article/articl
 import { ArticleDetail } from './components/article/article-detail'
 import { ArticleRawPage } from './components/article/article-raw-page'
 import { PageLayout } from './components/layout/page-layout'
+<<<<<<< HEAD
 import { KeyboardNavigationProvider } from './contexts/keyboard-navigation-context'
+=======
+import { KeyboardNavigationProvider, useKeyboardNavigationContext } from './contexts/keyboard-navigation-context'
+>>>>>>> feat/article-keyboard-nav
 const SettingsPage = lazy(() => import('./pages/settings-page').then(m => ({ default: m.SettingsPage })))
 const ChatPage = lazy(() => import('./pages/chat-page').then(m => ({ default: m.ChatPage })))
 const HomePage = lazy(() => import('./pages/home-page').then(m => ({ default: m.HomePage })))
@@ -216,6 +220,7 @@ function HomePageWrapper() {
 
 function ArticleDetailPage() {
   const { '*': splat } = useParams()
+  const { lastListUrl } = useKeyboardNavigationContext()
   const navigate = useNavigate()
 
   if (!splat) return null
@@ -238,7 +243,7 @@ function ArticleDetailPage() {
 
   return (
     <>
-      <Header mode="detail" onBack={() => navigate('/inbox')} />
+      <Header mode="detail" onBack={() => navigate(lastListUrl || '/inbox')} />
       <ArticleDetail articleUrl={articleUrl} />
     </>
   )
