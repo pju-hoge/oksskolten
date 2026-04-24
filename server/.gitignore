@@ -1,0 +1,16 @@
+node_modules/
+dist/
+/data/
+/data-prod/
+docs/temp_*
+.env
+*.db
+*.db-wal
+*.db-shm
+*.zip
+coverage/
+# Claude local settings & generated files
+.claude/settings.local.json
+.claude/worktrees/
+.claude/rules/.*.md
+start.sh
