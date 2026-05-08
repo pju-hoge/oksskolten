@@ -26,6 +26,7 @@ interface UseKeyboardNavigationOptions {
   onBookmarkToggle?: (id: string) => void
   onOpenExternal?: (id: string) => void
   onNearEnd?: () => void
+  onNearStart?: () => void
   enabled: boolean
   keyBindings?: KeyBindings
 }
@@ -81,6 +82,12 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions) {
           if (nextIndex < items.length) {
             onFocusChange(items[nextIndex])
             if (items.length - nextIndex <= NEAR_END_THRESHOLD && onNearEnd) {
+              onNearEnd()
+            }
+          } else {
+            // At end of list — trigger onNearEnd to load more items so
+            // subsequent keypresses can advance into the newly fetched data.
+            if (onNearEnd) {
               onNearEnd()
             }
           }
