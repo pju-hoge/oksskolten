@@ -26,7 +26,6 @@ interface UseKeyboardNavigationOptions {
   onBookmarkToggle?: (id: string) => void
   onOpenExternal?: (id: string) => void
   onNearEnd?: () => void
-  onNearStart?: () => void
   enabled: boolean
   keyBindings?: KeyBindings
 }
