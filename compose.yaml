@@ -10,6 +10,7 @@ services:
     command: npm run dev:server
     environment:
       NODE_ENV: development
+      AUTH_DISABLED: "1"
       PORT: 3000
       DATABASE_URL: file:/data/rss.db
       RSS_BRIDGE_URL: http://rss-bridge:80
