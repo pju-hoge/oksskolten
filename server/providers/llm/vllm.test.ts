@@ -118,7 +118,6 @@ describe('vllmProvider', () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        reasoning_format: 'auto',
         chat_template_kwargs: {
           enable_thinking: false,
           thinking: false,
@@ -127,7 +126,7 @@ describe('vllmProvider', () => {
     )
   })
 
-  it('uses chat_template_kwargs with false when vllm.enable_reasoning is undefined', async () => {
+  it('does not send reasoning_format when vllm.enable_reasoning is undefined', async () => {
     mockGetSetting.mockImplementation((key) => {
       if (key === 'vllm.base_url') return 'http://vllm:8000'
       if (key === 'api_key.vllm') return 'key'
@@ -142,7 +141,6 @@ describe('vllmProvider', () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        reasoning_format: 'auto',
         chat_template_kwargs: {
           enable_thinking: false,
           thinking: false,
