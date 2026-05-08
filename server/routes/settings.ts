@@ -52,6 +52,7 @@ const PREF_KEYS = [
   'ollama.base_url',
   'ollama.custom_headers',
   'vllm.base_url',
+  'vllm.enable_reasoning',
   'custom_themes',
   'retention.enabled',
   'retention.read_days',
@@ -86,6 +87,7 @@ const PREF_ALLOWED: Record<PrefKey, string[] | null> = {
   'ollama.base_url': null,
   'ollama.custom_headers': null,
   'vllm.base_url': null,
+  'vllm.enable_reasoning': ['on', 'off'],
   'custom_themes': null,
   'retention.enabled': ['on', 'off'],
   'retention.read_days': null,
@@ -659,7 +661,7 @@ export async function settingsRoutes(api: FastifyInstance): Promise<void> {
     const apiKey = getVllmApiKey()
     const headers: Record<string, string> = {}
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
-    return fetch(`${baseUrl}${path}`, { headers, signal: AbortSignal.timeout(5_000) })
+    return fetch(`${baseUrl}${path}`, { headers, signal: AbortSignal.timeout(15_000) })
   }
 
   api.get('/api/settings/vllm/models', async (_request, reply) => {

@@ -47,13 +47,28 @@ export const vllmProvider: LLMProvider = {
       })
     }
 
+    const enableReasoning = getSetting('vllm.enable_reasoning') === 'on'
     const response = await client.chat.completions.create({
       model: params.model,
       max_completion_tokens: params.maxTokens,
       messages,
+      reasoning_format: 'auto',
+      ...(enableReasoning
+        ? {
+            extra_body: {
+              enable_thinking: true,
+            },
+          }
+        : {
+            extra_body: {
+              enable_thinking: false,
+            },
+          }),
     })
 
-    const text = response.choices[0]?.message?.content ?? ''
+    const msg = response.choices[0]?.message as any
+    // Use reasoning_content when available (thinking enabled), otherwise fall back to content
+    const text = (msg?.reasoning_content ?? msg?.content ?? '') as string
     return {
       text,
       inputTokens: response.usage?.prompt_tokens ?? 0,
@@ -74,12 +89,25 @@ export const vllmProvider: LLMProvider = {
       })
     }
 
+    const enableReasoning = getSetting('vllm.enable_reasoning') === 'on'
     const stream = await client.chat.completions.create({
       model: params.model,
       max_completion_tokens: params.maxTokens,
       messages,
       stream: true,
       stream_options: { include_usage: true },
+      reasoning_format: 'auto',
+      ...(enableReasoning
+        ? {
+            extra_body: {
+              enable_thinking: true,
+            },
+          }
+        : {
+            extra_body: {
+              enable_thinking: false,
+            },
+          }),
     })
 
     let fullText = ''
@@ -87,10 +115,21 @@ export const vllmProvider: LLMProvider = {
     let outputTokens = 0
 
     for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content ?? ''
-      if (delta) {
-        fullText += delta
-        onText(delta)
+      const delta = chunk.choices[0]?.delta
+      if (!delta) continue
+
+      // Prefer reasoning_content_delta when available (thinking enabled)
+      const reasoningDelta = delta.reasoning_content_delta ?? ''
+      if (reasoningDelta) {
+        fullText += reasoningDelta
+        onText(reasoningDelta)
+        continue
+      }
+
+      const contentDelta = delta.content ?? ''
+      if (contentDelta) {
+        fullText += contentDelta
+        onText(contentDelta)
       }
       if (chunk.usage) {
         inputTokens = chunk.usage.prompt_tokens ?? inputTokens
