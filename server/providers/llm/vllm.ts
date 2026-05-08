@@ -52,7 +52,7 @@ export const vllmProvider: LLMProvider = {
       model: params.model,
       max_completion_tokens: params.maxTokens,
       messages,
-      reasoning_format: 'auto',
+      ...(enableReasoning && { reasoning_format: 'auto' }),
       chat_template_kwargs: {
         enable_thinking: enableReasoning,
         thinking: enableReasoning,
@@ -89,7 +89,7 @@ export const vllmProvider: LLMProvider = {
       messages,
       stream: true,
       stream_options: { include_usage: true },
-      reasoning_format: 'auto',
+      ...(enableReasoning && { reasoning_format: 'auto' }),
       chat_template_kwargs: {
         enable_thinking: enableReasoning,
         thinking: enableReasoning,

@@ -142,7 +142,6 @@ describe('vllmProvider', () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        reasoning_format: 'auto',
         chat_template_kwargs: {
           enable_thinking: false,
           thinking: false,
