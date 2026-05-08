@@ -20,7 +20,7 @@ services:
       CRON_SCHEDULE: "*/5 * * * *"
       MEILI_URL: http://meilisearch:7700
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      VLLM_BASE_URL: http://host.docker.internal:8000
+      # VLLM_BASE_URL set via .env file
     env_file:
       - path: .env
         required: false
