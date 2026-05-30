@@ -6,7 +6,7 @@ import type { ArticleDetail } from '../../shared/types'
 
 export function useArticleActions(article: ArticleDetail | undefined, articleKey: string) {
   const navigate = useNavigate()
-  const { mutate: globalMutate } = useSWRConfig()
+  const { mutate: globalMutate, cache } = useSWRConfig()
 
   const [optimisticBookmark, setOptimisticBookmark] = useState<boolean | undefined>(undefined)
   const [optimisticLiked, setOptimisticLiked] = useState<string | null | undefined>(undefined)
@@ -23,13 +23,16 @@ export function useArticleActions(article: ArticleDetail | undefined, articleKey
   }, [article?.id])
 
   const revalidateLists = useCallback(() => {
-    void globalMutate((key: string) =>
-      typeof key === 'string' && (
-        key.includes('/api/feeds') ||
-        key.includes('/api/articles')
-      ),
-    )
-  }, [globalMutate])
+    // globalMutate(filterFn) silently skips $inf$ keys produced by
+    // useSWRInfinite, so walk the cache directly to cover both
+    // /api/feeds (regular) and /api/articles (infinite) entries.
+    for (const key of cache.keys()) {
+      if (typeof key !== 'string') continue
+      if (key.includes('/api/feeds') || key.includes('/api/articles')) {
+        void globalMutate(key)
+      }
+    }
+  }, [globalMutate, cache])
 
   const toggleBookmark = useCallback(async () => {
     if (!article) return
