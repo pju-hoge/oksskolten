@@ -37,7 +37,12 @@ export function dataPath(...segments: string[]): string {
 /**
  * Find the project root directory by walking up from __dirname until
  * package.json is found. Works under both tsx (source) and compiled
- * (dist/) environments where __dirname depth differs.
+ * (dist/ or dist-server/) environments where __dirname depth differs.
+ *
+ * Assumes a single-package layout (no monorepo workspaces) where the
+ * first package.json walking upward is the project root. Will produce
+ * incorrect results in a multi-package workspace with nested
+ * package.json files.
  */
 export function findProjectRoot(dirname: string): string {
   let dir = dirname
