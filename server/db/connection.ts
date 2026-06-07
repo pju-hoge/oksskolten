@@ -33,7 +33,28 @@ function openDb(dbUrl: string) {
     instance.pragma('journal_mode = WAL')
   }
   instance.pragma('foreign_keys = ON')
+  // Limit SQLite internal heap growth to prevent native memory accumulation.
+  // Soft limit: SQLite tries to stay under this; exceeding it won't cause errors.
+  instance.pragma('soft_heap_limit = 268435456')  // 256MB
   return instance
+}
+
+/**
+ * Shrink SQLite memory and checkpoint WAL to release accumulated native heap.
+ * Safe to call periodically (e.g. every 5 min) to prevent libsql RSS growth.
+ * For remote (Turso) databases, only shrink_memory is attempted.
+ */
+export function shrinkMemory() {
+  try {
+    const remote = isRemote(process.env.DATABASE_URL || '')
+    if (!remote) {
+      db.pragma('wal_checkpoint(TRUNCATE)')
+    }
+    db.pragma('shrink_memory')
+    log.info('[db] Memory shrunk' + (remote ? '' : ' + WAL checkpoint'))
+  } catch (err) {
+    log.error('[db] shrinkMemory error:', err)
+  }
 }
 
 let db = openDb(process.env.DATABASE_URL || `file:${dataPath('rss.db')}`)
