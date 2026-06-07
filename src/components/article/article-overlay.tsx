@@ -18,6 +18,7 @@ export function ArticleOverlay({ articleUrl, onClose }: ArticleOverlayProps) {
           aria-describedby={undefined}
           data-keyboard-nav-passthrough=""
           onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">Article</DialogTitle>
           {/* Close button */}
