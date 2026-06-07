@@ -95,6 +95,8 @@ export function useSettings() {
   const dirtyKeysRef = useRef<Set<string>>(new Set())
   const pendingRef = useRef<Partial<Prefs>>({})
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const inFlightRef = useRef<Promise<unknown> | null>(null)
+  const fireSaveRef = useRef<() => void>(() => {})
 
   // Stable refs for backfill values (only needed for keys that backfill to DB)
   const themeNameRef = useRef(themeName)
@@ -204,7 +206,53 @@ export function useSettings() {
     }
   }, [prefs])
 
-  // Flush pending changes immediately via fetch keepalive (survives page unload)
+  // Serialize PATCHes so client send order matches server apply order. A new
+  // PATCH is fired only when no other PATCH is in flight; otherwise the new
+  // changes accumulate in pendingRef and are picked up after the current
+  // request settles. This avoids two PATCHes racing against each other.
+  const fireSaveIfIdle = useCallback(() => {
+    if (inFlightRef.current) return
+    if (Object.keys(pendingRef.current).length === 0) return
+
+    const patch = { ...pendingRef.current }
+    pendingRef.current = {}
+    const keys = Object.keys(patch) as Array<keyof Prefs>
+
+    const promise = apiPatch('/api/settings/preferences', patch)
+      .then(() => {
+        for (const key of keys) {
+          if (pendingRef.current[key] === undefined) {
+            dirtyKeysRef.current.delete(key)
+          }
+        }
+        void mutatePrefs((curr) => {
+          if (!curr) return undefined
+          const next = { ...curr }
+          for (const key of keys) {
+            if (pendingRef.current[key] === undefined) {
+              const value = patch[key]
+              if (value !== undefined) next[key] = value
+            }
+          }
+          return next
+        }, false)
+      })
+      .catch(() => {})
+      .finally(() => {
+        inFlightRef.current = null
+        if (Object.keys(pendingRef.current).length > 0) {
+          fireSaveRef.current()
+        }
+      })
+    inFlightRef.current = promise
+  }, [mutatePrefs])
+
+  fireSaveRef.current = fireSaveIfIdle
+
+  // Best-effort flush via fetch keepalive on page unload. Does not coordinate
+  // with in-flight requests, so a "rapid edits + immediate reload" sequence
+  // can still land out of order on the server. See PR #68 follow-up for full
+  // beforeunload serialization (requires server-side revision tracking).
   const flushNow = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
@@ -213,39 +261,23 @@ export function useSettings() {
     const patch = { ...pendingRef.current }
     pendingRef.current = {}
     if (Object.keys(patch).length > 0) {
-      const keys = Object.keys(patch)
       fetch('/api/settings/preferences', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(patch),
         keepalive: true,
-      })
-        .then(() => {
-          for (const key of keys) dirtyKeysRef.current.delete(key)
-          if (prefs) void mutatePrefs({ ...prefs, ...patch }, false)
-        })
-        .catch(() => {})
+      }).catch(() => {})
     }
-  }, [prefs, mutatePrefs])
+  }, [])
 
   // Debounced save: 500ms after last change
   const scheduleSave = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       timerRef.current = undefined
-      const patch = { ...pendingRef.current }
-      pendingRef.current = {}
-      if (Object.keys(patch).length > 0) {
-        const keys = Object.keys(patch)
-        apiPatch('/api/settings/preferences', patch)
-          .then(() => {
-            for (const key of keys) dirtyKeysRef.current.delete(key)
-            if (prefs) void mutatePrefs({ ...prefs, ...patch }, false)
-          })
-          .catch(() => {})
-      }
+      fireSaveIfIdle()
     }, SETTINGS_SYNC_DEBOUNCE_MS)
-  }, [prefs, mutatePrefs])
+  }, [fireSaveIfIdle])
 
   // Flush on beforeunload + unmount
   useEffect(() => {
