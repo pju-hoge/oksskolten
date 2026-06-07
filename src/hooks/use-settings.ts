@@ -86,7 +86,7 @@ export function useSettings() {
   const [translateTargetLang, setTranslateTargetLangState] = useState<string | null>(null)
 
   // --- DB sync ---
-  const { data: prefs } = useSWR<Prefs>(
+  const { data: prefs, mutate: mutatePrefs } = useSWR<Prefs>(
     '/api/settings/preferences',
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false },
@@ -95,6 +95,8 @@ export function useSettings() {
   const dirtyKeysRef = useRef<Set<string>>(new Set())
   const pendingRef = useRef<Partial<Prefs>>({})
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const inFlightRef = useRef<Promise<unknown> | null>(null)
+  const fireSaveRef = useRef<() => void>(() => {})
 
   // Stable refs for backfill values (only needed for keys that backfill to DB)
   const themeNameRef = useRef(themeName)
@@ -204,7 +206,53 @@ export function useSettings() {
     }
   }, [prefs])
 
-  // Flush pending changes immediately via fetch keepalive (survives page unload)
+  // Serialize PATCHes so client send order matches server apply order. A new
+  // PATCH is fired only when no other PATCH is in flight; otherwise the new
+  // changes accumulate in pendingRef and are picked up after the current
+  // request settles. This avoids two PATCHes racing against each other.
+  const fireSaveIfIdle = useCallback(() => {
+    if (inFlightRef.current) return
+    if (Object.keys(pendingRef.current).length === 0) return
+
+    const patch = { ...pendingRef.current }
+    pendingRef.current = {}
+    const keys = Object.keys(patch) as Array<keyof Prefs>
+
+    const promise = apiPatch('/api/settings/preferences', patch)
+      .then(() => {
+        for (const key of keys) {
+          if (pendingRef.current[key] === undefined) {
+            dirtyKeysRef.current.delete(key)
+          }
+        }
+        void mutatePrefs((curr) => {
+          if (!curr) return undefined
+          const next = { ...curr }
+          for (const key of keys) {
+            if (pendingRef.current[key] === undefined) {
+              const value = patch[key]
+              if (value !== undefined) next[key] = value
+            }
+          }
+          return next
+        }, false)
+      })
+      .catch(() => {})
+      .finally(() => {
+        inFlightRef.current = null
+        if (Object.keys(pendingRef.current).length > 0) {
+          fireSaveRef.current()
+        }
+      })
+    inFlightRef.current = promise
+  }, [mutatePrefs])
+
+  fireSaveRef.current = fireSaveIfIdle
+
+  // Best-effort flush via fetch keepalive on page unload. Does not coordinate
+  // with in-flight requests, so a "rapid edits + immediate reload" sequence
+  // can still land out of order on the server. See PR #68 follow-up for full
+  // beforeunload serialization (requires server-side revision tracking).
   const flushNow = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
@@ -227,13 +275,9 @@ export function useSettings() {
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       timerRef.current = undefined
-      const patch = { ...pendingRef.current }
-      pendingRef.current = {}
-      if (Object.keys(patch).length > 0) {
-        apiPatch('/api/settings/preferences', patch).catch(() => {})
-      }
+      fireSaveIfIdle()
     }, SETTINGS_SYNC_DEBOUNCE_MS)
-  }, [])
+  }, [fireSaveIfIdle])
 
   // Flush on beforeunload + unmount
   useEffect(() => {
@@ -264,6 +308,7 @@ export function useSettings() {
     syncedSetArticleFont,
     syncedSetMascot,
     syncedSetKeyboardNavigation,
+    syncedSetKeybindings,
     syncedSetChatProvider,
     syncedSetChatModel,
     syncedSetSummaryProvider,
@@ -293,6 +338,12 @@ export function useSettings() {
       syncedSetArticleFont: make<string>('appearance.font_family', setArticleFont),
       syncedSetMascot: make<MascotChoice>('appearance.mascot', setMascot),
       syncedSetKeyboardNavigation: make<'on' | 'off'>('reading.keyboard_navigation', setKeyboardNavigation),
+      syncedSetKeybindings: (value: import('./use-keyboard-navigation').KeyBindings) => {
+        dirtyKeysRef.current.add('reading.keybindings')
+        setKeybindings(value)
+        pendingRef.current['reading.keybindings'] = JSON.stringify(value)
+        scheduleSaveRef.current()
+      },
       syncedSetChatProvider: make<string>('chat.provider', setChatProviderState),
       syncedSetChatModel: make<string>('chat.model', setChatModelState),
       syncedSetSummaryProvider: make<string>('summary.provider', setSummaryProviderState),
@@ -304,14 +355,6 @@ export function useSettings() {
     // scheduleSave and dirtyKeysRef are stable refs; remaining setters are useState/useCallback-stable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setDateMode, setAutoMarkRead, setShowUnreadIndicator, setInternalLinks, setShowThumbnails, setShowFeedActivity, setChatPosition, setArticleOpenMode, setCategoryUnreadOnly, setLayout, setArticleFont, setMascot])
-
-  // Special: keybindings setter serializes to JSON
-  const syncedSetKeybindings = useCallback((value: import('./use-keyboard-navigation').KeyBindings) => {
-    dirtyKeysRef.current.add('reading.keybindings')
-    setKeybindings(value)
-    pendingRef.current['reading.keybindings'] = JSON.stringify(value)
-    scheduleSave()
-  }, [setKeybindings, scheduleSave])
 
   // Special: theme setter updates 2 keys + resets highlight
   const syncedSetTheme = useCallback((name: string) => {
