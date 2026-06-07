@@ -120,7 +120,7 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
   // ---------------------------------------------------------------------------
   // Keyboard navigation
   // ---------------------------------------------------------------------------
-  const { focusedItemId, setFocusedItemId, setArticleIds, setArticleUrls, setNavigateToArticle, setLastListUrl } = useKeyboardNavigationContext()
+  const { focusedItemId, setFocusedItemId, setArticleIds, setArticleUrls, setLastListUrl } = useKeyboardNavigationContext()
   const isKeyboardNavEnabled = keyboardNavigation === 'on' && !isGridLayout
 
   const articleIds = useMemo(() => articles.map(a => String(a.id)), [articles])
@@ -146,18 +146,6 @@ export const ArticleList = forwardRef<ArticleListHandle, object>(function Articl
   }, [articles])
 
   const isOverlayMode = articleOpenMode === 'overlay'
-
-  useEffect(() => {
-    setNavigateToArticle(() => (id: string) => {
-      const article = articleMap.get(id)
-      if (!article) return
-      if (isOverlayMode) {
-        setOverlayUrl(article.url)
-      } else {
-        void navigate(articleUrlToPath(article.url))
-      }
-    })
-  }, [articleMap, isOverlayMode, navigate, setNavigateToArticle])
   // Short debounce after overlay close to prevent Escape from immediately clearing focus
   const escapeDebounceRef = useRef(false)
 

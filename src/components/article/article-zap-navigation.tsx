@@ -14,10 +14,8 @@ interface ArticleZapNavigationProps {
 
 export function ArticleZapNavigation({ currentArticleId, onBookmarkToggle, onOpenExternal }: ArticleZapNavigationProps) {
   const navigate = useNavigate()
-  const { articleIds, articleUrls, setFocusedItemId, navigateToArticle, lastListUrl } = useKeyboardNavigationContext()
-  const { settings: { keyboardNavigation, keybindings, articleOpenMode } } = useAppLayout()
-
-  const isOverlayMode = articleOpenMode === 'overlay'
+  const { articleIds, articleUrls, setFocusedItemId, lastListUrl } = useKeyboardNavigationContext()
+  const { settings: { keyboardNavigation, keybindings } } = useAppLayout()
 
   useKeyboardNavigation({
     items: articleIds,
@@ -25,18 +23,12 @@ export function ArticleZapNavigation({ currentArticleId, onBookmarkToggle, onOpe
     onFocusChange: (id) => {
       setFocusedItemId(id)
       const url = articleUrls[id]
-      if (url && !isOverlayMode) {
-        void navigate(articleUrlToPath(url))
-      } else {
-        navigateToArticle(id)
-      }
+      if (url) void navigate(articleUrlToPath(url))
     },
     onBookmarkToggle: onBookmarkToggle ? () => onBookmarkToggle() : undefined,
     onOpenExternal: onOpenExternal ? () => onOpenExternal() : undefined,
     onEscape: () => {
-      if (!isOverlayMode) {
-        void navigate(lastListUrl || '/inbox')
-      }
+      void navigate(lastListUrl || '/inbox')
     },
     enabled: keyboardNavigation === 'on' && articleIds.length > 0,
     keyBindings: keybindings,

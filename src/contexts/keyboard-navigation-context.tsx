@@ -7,8 +7,6 @@ interface KeyboardNavigationValue {
   setArticleIds: (ids: string[]) => void
   articleUrls: Record<string, string>
   setArticleUrls: (urls: Record<string, string>) => void
-  navigateToArticle: (id: string) => void
-  setNavigateToArticle: (fn: (id: string) => void) => void
   lastListUrl: string | null
   setLastListUrl: (url: string | null) => void
 }
@@ -32,7 +30,6 @@ export function KeyboardNavigationProvider({ children }: { children: ReactNode }
       return saved ? JSON.parse(saved) : {}
     } catch { return {} }
   })
-  const [navigateToArticle, setNavigateToArticle] = useState<(id: string) => void>(() => () => {})
 
   const setLastListUrl = useCallback((url: string | null) => {
     setLastListUrlState(url)
@@ -59,8 +56,6 @@ export function KeyboardNavigationProvider({ children }: { children: ReactNode }
         setArticleIds: updateArticleIds,
         articleUrls,
         setArticleUrls: updateArticleUrls,
-        navigateToArticle,
-        setNavigateToArticle,
         lastListUrl,
         setLastListUrl,
       }}

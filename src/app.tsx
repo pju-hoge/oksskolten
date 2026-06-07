@@ -231,7 +231,7 @@ function ArticleDetailPage() {
   return (
     <>
       <Header mode="detail" onBack={() => navigate(lastListUrl || '/inbox')} />
-      <ArticleDetail articleUrl={articleUrl} />
+      <ArticleDetail articleUrl={articleUrl} enableZapNavigation />
     </>
   )
 }
