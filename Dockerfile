@@ -32,9 +32,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
-# Pre-compiled server — runs from dist/server/ (no tsx needed at runtime)
-COPY server ./server
-COPY shared ./shared
+COPY --from=build /app/dist-server ./dist-server
 COPY migrations ./migrations
 
 RUN addgroup --system app && adduser --system --ingroup app app \
@@ -44,4 +42,4 @@ USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
-CMD ["node", "--dns-result-order=ipv4first", "dist/server/index.js"]
+CMD ["node", "--dns-result-order=ipv4first", "dist-server/server/index.js"]
