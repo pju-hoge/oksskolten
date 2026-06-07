@@ -4,6 +4,7 @@ import { fetcher, apiPost, apiPatch } from '../../../lib/fetcher'
 import { PROVIDER_LABELS, LLM_API_PROVIDERS, TRANSLATE_SERVICE_PROVIDERS } from '../../../data/aiModels'
 import { Input } from '@/components/ui/input'
 import { FormField } from '@/components/ui/form-field'
+import { RadioGroup } from '@/components/ui/radio-group'
 import { ExternalLink, CircleDot, CircleCheck, CircleSlash } from 'lucide-react'
 import type { Settings } from '../../../hooks/use-settings'
 
@@ -457,10 +458,12 @@ function VllmCard({ t }: { t: TFunc }) {
   )
 
   const savedBaseUrl = prefs?.['vllm.base_url'] || ''
+  const savedEnableReasoning = prefs?.['vllm.enable_reasoning'] || 'off'
   const isConfigured = keyStatus?.configured
 
   const [baseUrlInput, setBaseUrlInput] = useState('')
   const [apiKeyInput, setApiKeyInput] = useState('')
+  const [enableReasoning, setEnableReasoning] = useState(savedEnableReasoning)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -471,6 +474,7 @@ function VllmCard({ t }: { t: TFunc }) {
   useEffect(() => {
     if (!prefs || initialized) return
     setBaseUrlInput(prefs['vllm.base_url'] || '')
+    setEnableReasoning(prefs['vllm.enable_reasoning'] || 'off')
     setInitialized(true)
   }, [prefs, initialized])
 
@@ -484,7 +488,7 @@ function VllmCard({ t }: { t: TFunc }) {
     setSaving(true)
     try {
       const promises: Promise<any>[] = [
-        apiPatch('/api/settings/preferences', { 'vllm.base_url': baseUrlInput || '' }),
+        apiPatch('/api/settings/preferences', { 'vllm.base_url': baseUrlInput || '', 'vllm.enable_reasoning': enableReasoning }),
       ]
       if (apiKeyInput) {
         promises.push(apiPost('/api/settings/api-keys/vllm', { apiKey: apiKeyInput }))
@@ -499,7 +503,7 @@ function VllmCard({ t }: { t: TFunc }) {
     } finally {
       setSaving(false)
     }
-  }, [saving, baseUrlInput, apiKeyInput, mutatePrefs, mutateKeyStatus, t])
+  }, [saving, baseUrlInput, apiKeyInput, enableReasoning, mutatePrefs, mutateKeyStatus, t])
 
   const handleDeleteKey = useCallback(async () => {
     if (saving) return
@@ -529,7 +533,7 @@ function VllmCard({ t }: { t: TFunc }) {
     }
   }, [testing])
 
-  const hasChanges = baseUrlInput !== savedBaseUrl || !!apiKeyInput
+  const hasChanges = baseUrlInput !== savedBaseUrl || enableReasoning !== savedEnableReasoning || !!apiKeyInput
 
   return (
     <div className="p-3 rounded-lg bg-bg-card border border-border min-h-[3rem] space-y-2">
@@ -569,6 +573,20 @@ function VllmCard({ t }: { t: TFunc }) {
           className="py-1.5"
         />
       </FormField>
+
+      <div className="mt-4">
+        <p className="text-sm text-text mb-1">{t('vllm.enableReasoning')}</p>
+        <p className="text-xs text-muted mb-3">{t('vllm.enableReasoningDesc')}</p>
+        <RadioGroup
+          name="vllmEnableReasoning"
+          options={[
+            { value: 'on' as const, label: t('vllm.enableReasoningOn') },
+            { value: 'off' as const, label: t('vllm.enableReasoningOff') },
+          ]}
+          value={enableReasoning}
+          onChange={setEnableReasoning}
+        />
+      </div>
 
       <div className="flex items-center gap-2">
         {hasChanges && (
