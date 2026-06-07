@@ -13,8 +13,10 @@ import type { ParseHtmlInput, ParseHtmlResult } from './contentWorker.js'
 // rather than with a runtime branch.
 const pool = new PiscinaPool({
   filename: new URL('./contentWorker.js', import.meta.url).href,
-  execArgv: process.execArgv,
+  execArgv: [...process.execArgv, '--max-old-space-size=256'],
   maxThreads: Number(process.env.PARSE_MAX_THREADS) || 2,
+  minThreads: 0,
+  idleTimeout: 30_000,
 })
 
 /** Per-task timeout for worker pool. */
