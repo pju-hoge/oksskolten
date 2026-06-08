@@ -9,7 +9,7 @@ import { logger } from '../logger.js'
 const log = logger.child('retention')
 
 /** Normalize a URL so that raw-Unicode and percent-encoded forms compare equal. */
-function normalizeUrl(raw: string): string {
+export function normalizeUrl(raw: string): string {
   try { return new URL(raw).href } catch { return raw }
 }
 
@@ -374,6 +374,16 @@ export function insertArticle(data: {
   return articleId
 }
 
+/**
+ * Mark the refresh attempt timestamp without touching content or triggering
+ * a Meilisearch resync. Used by the fetcher to record "we tried to repair
+ * this stale article but couldn't improve it" so the backoff window kicks
+ * in and we don't keep bypassing the RSS HTTP cache forever.
+ */
+export function markArticleRefreshAttempted(articleId: number, when: string): void {
+  runNamed('UPDATE articles SET last_refresh_attempt_at = @when WHERE id = @id', { id: articleId, when })
+}
+
 export function updateArticleContent(
   articleId: number,
   data: {
@@ -387,6 +397,7 @@ export function updateArticleContent(
     last_error?: string | null
     retry_count?: number
     last_retry_at?: string | null
+    last_refresh_attempt_at?: string | null
   },
 ): void {
   const fields: string[] = []
@@ -402,6 +413,60 @@ export function updateArticleContent(
   runNamed(`UPDATE articles SET ${fields.join(', ')} WHERE id = @id`, params)
   const doc = buildMeiliDoc(articleId)
   if (doc) syncArticleToSearch(doc)
+}
+
+/**
+ * One-day backoff window between refresh attempts. After we try to repair
+ * a stale article and fail (e.g. RSS has no description, the body is
+ * legitimately short, or the item dropped out of the current feed), the
+ * article is excluded from refresh queries for this long so we don't
+ * bypass the RSS HTTP cache on every fetch tick forever.
+ */
+const REFRESH_ATTEMPT_BACKOFF = "datetime('now', '-1 day')"
+
+/**
+ * Return id + url + full_text for active articles in the given feed whose
+ * stored full_text trimmed length is below the threshold and that have not
+ * been attempted within the backoff window. Used by the fetcher to detect
+ * previously-saved articles where extraction returned only a page title
+ * (e.g. thin SPA sites) so the RSS excerpt fallback can be retried.
+ *
+ * Driven by feed_id, not by the current RSS URL list, so articles that
+ * have rolled off the live feed still get their backoff timestamp updated
+ * — otherwise their stale rows would keep skipCache enabled forever.
+ */
+export function getArticlesNeedingRefresh(
+  feedId: number,
+  minLength: number,
+): { id: number; url: string; full_text: string | null }[] {
+  return getDb().prepare(`
+    SELECT id, url, full_text
+    FROM articles
+    WHERE feed_id = ?
+      AND purged_at IS NULL
+      AND length(coalesce(trim(full_text), '')) < ?
+      AND (last_refresh_attempt_at IS NULL OR datetime(last_refresh_attempt_at) < ${REFRESH_ATTEMPT_BACKOFF})
+  `).all(feedId, minLength) as { id: number; url: string; full_text: string | null }[]
+}
+
+/**
+ * Count active articles for the given feed that are still eligible for a
+ * refresh attempt. The fetcher uses a positive count as the signal to
+ * bypass the RSS HTTP cache for that feed so the refresh path can run
+ * even when the feed XML hasn't changed. Articles inside their backoff
+ * window are excluded so unfixable stale rows don't keep the cache
+ * disabled forever.
+ */
+export function countStaleArticlesByFeed(feedId: number, minLength: number): number {
+  const row = getDb().prepare(`
+    SELECT COUNT(*) AS n
+    FROM articles
+    WHERE feed_id = ?
+      AND purged_at IS NULL
+      AND length(coalesce(trim(full_text), '')) < ?
+      AND (last_refresh_attempt_at IS NULL OR datetime(last_refresh_attempt_at) < ${REFRESH_ATTEMPT_BACKOFF})
+  `).get(feedId, minLength) as { n: number }
+  return row.n
 }
 
 export function getExistingArticleUrls(urls: string[]): Set<string> {
