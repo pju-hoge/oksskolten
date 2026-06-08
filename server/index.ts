@@ -19,7 +19,7 @@ import { authRoutes } from './authRoutes.js'
 import { passkeyRoutes } from './passkeyRoutes.js'
 import { oauthRoutes } from './oauthRoutes.js'
 import { fetchAllFeeds } from './fetcher.js'
-import { rebuildSearchIndex, isSearchReady, syncAllScoredArticlesToSearch } from './search/sync.js'
+import { ensureSearchIndex, rebuildSearchIndex, isSearchReady, syncAllScoredArticlesToSearch } from './search/sync.js'
 
 // --- Startup guards ---
 if (process.env.AUTH_DISABLED === '1' && process.env.NODE_ENV !== 'development') {
@@ -199,20 +199,24 @@ cronTasks.push(cron.schedule(SHRINK_MEM_SCHEDULE, () => {
 }))
 
 // --- Search index ---
-// Non-blocking: rebuild runs in background, search returns 503 until ready
-// Retry with backoff if initial rebuild fails (e.g. Meilisearch not yet ready)
+// Non-blocking: ensure the search index is ready in the background. Search
+// returns 503 until ready. `ensureSearchIndex` reuses an already-populated
+// index when one exists (the common case after a restart) and only triggers
+// a full rebuild when the index is missing or empty, so HMR restarts and
+// normal redeploys don't pile up rebuild tasks on the Meilisearch queue.
+// Retry with backoff if Meilisearch is not yet reachable on first attempt.
 void (async () => {
   const retries = [0, 5_000, 15_000, 30_000]
   for (const delay of retries) {
     if (delay) await new Promise((r) => setTimeout(r, delay))
     try {
-      await rebuildSearchIndex()
+      await ensureSearchIndex()
       return
     } catch (err) {
-      log.error(`[search] Index rebuild attempt failed (next retry in ${retries[retries.indexOf(delay) + 1] ?? 'none'}ms):`, err)
+      log.error(`[search] Index ensure attempt failed (next retry in ${retries[retries.indexOf(delay) + 1] ?? 'none'}ms):`, err)
     }
   }
-  log.error('[search] All initial rebuild attempts failed, will retry on next 6h cron')
+  log.error('[search] All initial ensure attempts failed, will retry on next 6h cron')
 })()
 
 cronTasks.push(cron.schedule('0 */6 * * *', async () => {

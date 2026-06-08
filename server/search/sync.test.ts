@@ -2,20 +2,35 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setupTestDb } from '../__tests__/helpers/testDb.js'
 import { getDb } from '../db/connection.js'
 
-// Mock Meilisearch client
+// Mock Meilisearch client. Each method is exposed individually so individual
+// tests can override the return value (e.g. simulate "no indexes yet").
 const mockWaitTask = vi.fn().mockResolvedValue({})
 const mockUpdateDocuments = vi.fn().mockReturnValue({ waitTask: mockWaitTask })
+const mockAddDocuments = vi.fn().mockReturnValue({ waitTask: mockWaitTask })
+const mockUpdateSettings = vi.fn().mockReturnValue({ waitTask: mockWaitTask })
+const mockGetStats = vi.fn()
+const mockGetIndexes = vi.fn()
+const mockCreateIndex = vi.fn().mockReturnValue({ waitTask: mockWaitTask })
+const mockDeleteIndex = vi.fn().mockReturnValue({ waitTask: mockWaitTask })
+const mockSwapIndexes = vi.fn().mockReturnValue({ waitTask: mockWaitTask })
 vi.mock('./client.js', () => ({
   getSearchClient: () => ({
+    getIndexes: mockGetIndexes,
     index: () => ({
       updateDocuments: mockUpdateDocuments,
+      addDocuments: mockAddDocuments,
+      updateSettings: mockUpdateSettings,
+      getStats: mockGetStats,
     }),
+    createIndex: mockCreateIndex,
+    deleteIndex: mockDeleteIndex,
+    swapIndexes: mockSwapIndexes,
   }),
   ARTICLES_INDEX: 'articles',
   ARTICLES_STAGING_INDEX: 'articles_staging',
 }))
 
-import { syncAllScoredArticlesToSearch, _setRebuilding } from './sync.js'
+import { ensureSearchIndex, isSearchReady, syncAllScoredArticlesToSearch, _setRebuilding, _setSearchReady } from './sync.js'
 
 function seedFeed(): number {
   return getDb().prepare(
@@ -120,5 +135,102 @@ describe('syncAllScoredArticlesToSearch', () => {
 
     const docs = mockUpdateDocuments.mock.calls[0][0] as Record<string, unknown>[]
     expect(Object.keys(docs[0]).sort()).toEqual(['id', 'score'])
+  })
+})
+
+describe('ensureSearchIndex', () => {
+  beforeEach(() => {
+    setupTestDb()
+    mockGetIndexes.mockReset()
+    mockGetStats.mockReset()
+    mockCreateIndex.mockClear()
+    mockDeleteIndex.mockClear()
+    mockAddDocuments.mockClear()
+    mockSwapIndexes.mockClear()
+    mockUpdateSettings.mockClear()
+    mockUpdateDocuments.mockClear()
+    mockWaitTask.mockClear()
+    _setRebuilding(false)
+    _setSearchReady(false)
+  })
+
+  it('skips rebuild when the articles index already has documents and reapplies settings idempotently', async () => {
+    mockGetIndexes.mockResolvedValue({ results: [{ uid: 'articles' }] })
+    mockGetStats.mockResolvedValue({ numberOfDocuments: 42 })
+
+    await ensureSearchIndex()
+
+    expect(isSearchReady()).toBe(true)
+    // Skipping means we never touch the heavy create / swap operations.
+    expect(mockCreateIndex).not.toHaveBeenCalled()
+    expect(mockDeleteIndex).not.toHaveBeenCalled()
+    expect(mockAddDocuments).not.toHaveBeenCalled()
+    // Settings must still be reapplied so a redeploy that changed the
+    // schema (new filterable attribute, etc.) picks it up without waiting
+    // for the 6h cron rebuild.
+    expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+    const appliedSettings = mockUpdateSettings.mock.calls[0][0] as Record<string, unknown>
+    expect(appliedSettings).toHaveProperty('filterableAttributes')
+    expect(appliedSettings).toHaveProperty('searchableAttributes')
+  })
+
+  it('falls through to rebuild when the articles index is missing', async () => {
+    mockGetIndexes.mockResolvedValue({ results: [] })
+
+    await ensureSearchIndex()
+
+    expect(mockCreateIndex).toHaveBeenCalled()
+  })
+
+  it('falls through to rebuild when the articles index is empty', async () => {
+    mockGetIndexes.mockResolvedValue({ results: [{ uid: 'articles' }] })
+    mockGetStats.mockResolvedValue({ numberOfDocuments: 0 })
+
+    await ensureSearchIndex()
+
+    expect(mockCreateIndex).toHaveBeenCalled()
+  })
+
+  it('falls through to rebuild when the existence check throws', async () => {
+    // Meilisearch transient failure on the first existence check; the
+    // function should still try a rebuild rather than declaring search
+    // ready against an unknown state.
+    mockGetIndexes.mockRejectedValueOnce(new Error('connection refused'))
+    mockGetIndexes.mockResolvedValue({ results: [] })
+
+    await ensureSearchIndex()
+
+    expect(mockCreateIndex).toHaveBeenCalled()
+  })
+
+  it('throws on settings-apply failure without triggering a full rebuild', async () => {
+    // Index is populated, so the skip path applies. If updateSettings hits
+    // a timeout (the same queue-pressure symptom that motivated this
+    // change), we must NOT cascade into the heavy rebuild because that
+    // would worsen the queue. Surface the error to the startup retry loop
+    // instead.
+    mockGetIndexes.mockResolvedValue({ results: [{ uid: 'articles' }] })
+    mockGetStats.mockResolvedValue({ numberOfDocuments: 42 })
+    mockWaitTask.mockRejectedValueOnce(new Error('MeiliSearchTaskTimeOutError: timeout'))
+
+    await expect(ensureSearchIndex()).rejects.toThrow()
+    expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+    // The full-rebuild operations must not have been reached.
+    expect(mockCreateIndex).not.toHaveBeenCalled()
+    expect(mockDeleteIndex).not.toHaveBeenCalled()
+    expect(mockSwapIndexes).not.toHaveBeenCalled()
+    expect(isSearchReady()).toBe(false)
+  })
+
+  it('throws when the fallthrough rebuild fails so the startup retry loop can back off', async () => {
+    // No indexes exist, so ensureSearchIndex must fall through to rebuild.
+    // Make rebuildSearchIndex hit a hard failure that its internal catch
+    // will swallow without setting searchReady. ensureSearchIndex must
+    // surface that as a thrown error to its caller.
+    mockGetIndexes.mockResolvedValueOnce({ results: [] }) // ensure check: no articles
+    mockGetIndexes.mockRejectedValueOnce(new Error('meili down')) // rebuild's own check
+
+    await expect(ensureSearchIndex()).rejects.toThrow(/rebuild/i)
+    expect(isSearchReady()).toBe(false)
   })
 })
