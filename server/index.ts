@@ -160,6 +160,10 @@ let activeFetchPromise: Promise<void> | null = null
 
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '*/5 * * * *'
 cronTasks.push(cron.schedule(CRON_SCHEDULE, async () => {
+  if (activeFetchPromise) {
+    log.info('[cron] Previous fetch still running, skipping')
+    return
+  }
   log.info('[cron] Feed fetch triggered')
   const p = (async () => {
     try {
