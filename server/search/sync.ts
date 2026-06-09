@@ -19,6 +19,11 @@ export function _setRebuilding(value: boolean): void {
   rebuilding = value
 }
 
+/** @internal Test-only helper to reset the searchReady flag between cases */
+export function _setSearchReady(value: boolean): void {
+  searchReady = value
+}
+
 // --- Change log for rebuild consistency ---
 
 type ChangeEntry =
@@ -40,6 +45,14 @@ const INDEX_SETTINGS = {
 
 const BATCH_SIZE = 1000
 
+// Meilisearch processes each task in a few seconds, but accumulated queue
+// depth (score sync writes, individual article updates, prior rebuild batches)
+// can keep a task waiting several minutes before it starts. The previous
+// 60-second client wait timed out long before the task was even picked up,
+// even when the server-side task itself succeeded. 5 minutes accommodates
+// typical queue depth at ~10k articles; revisit if dataset grows further.
+const MEILI_TASK_TIMEOUT_MS = 300_000
+
 export async function rebuildSearchIndex(): Promise<void> {
   if (rebuilding) {
     log.info('Rebuild already in progress, skipping')
@@ -58,13 +71,13 @@ export async function rebuildSearchIndex(): Promise<void> {
 
     // 1. Create or reset staging index
     if (indexSet.has(ARTICLES_STAGING_INDEX)) {
-      await client.deleteIndex(ARTICLES_STAGING_INDEX).waitTask({ timeout: 60_000 })
+      await client.deleteIndex(ARTICLES_STAGING_INDEX).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
     }
-    await client.createIndex(ARTICLES_STAGING_INDEX, { primaryKey: 'id' }).waitTask({ timeout: 60_000 })
+    await client.createIndex(ARTICLES_STAGING_INDEX, { primaryKey: 'id' }).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
 
     // 2. Apply index settings to staging
     const stagingIndex = client.index(ARTICLES_STAGING_INDEX)
-    await stagingIndex.updateSettings(INDEX_SETTINGS).waitTask({ timeout: 60_000 })
+    await stagingIndex.updateSettings(INDEX_SETTINGS).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
 
     // 3. Fetch all articles from SQLite and batch-insert into staging
     const rows = getDb().prepare(`
@@ -90,7 +103,7 @@ export async function rebuildSearchIndex(): Promise<void> {
 
     for (let i = 0; i < docs.length; i += BATCH_SIZE) {
       const batch = docs.slice(i, i + BATCH_SIZE)
-      await stagingIndex.addDocuments(batch).waitTask({ timeout: 60_000 })
+      await stagingIndex.addDocuments(batch).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
     }
 
     // 4. Promote staging to production
@@ -98,15 +111,15 @@ export async function rebuildSearchIndex(): Promise<void> {
       // Swap articles <-> articles_staging, then clean up old data
       await client.swapIndexes([
         { indexes: [ARTICLES_INDEX, ARTICLES_STAGING_INDEX] } as any,
-      ]).waitTask({ timeout: 60_000 })
-      await client.deleteIndex(ARTICLES_STAGING_INDEX).waitTask({ timeout: 60_000 })
+      ]).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
+      await client.deleteIndex(ARTICLES_STAGING_INDEX).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
     } else {
       // First run: no existing articles index — create empty one for swap
-      await client.createIndex(ARTICLES_INDEX, { primaryKey: 'id' }).waitTask({ timeout: 60_000 })
+      await client.createIndex(ARTICLES_INDEX, { primaryKey: 'id' }).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
       await client.swapIndexes([
         { indexes: [ARTICLES_INDEX, ARTICLES_STAGING_INDEX] } as any,
-      ]).waitTask({ timeout: 60_000 })
-      await client.deleteIndex(ARTICLES_STAGING_INDEX).waitTask({ timeout: 60_000 })
+      ]).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
+      await client.deleteIndex(ARTICLES_STAGING_INDEX).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
     }
 
     // 5. Replay change log
@@ -116,7 +129,7 @@ export async function rebuildSearchIndex(): Promise<void> {
       const deletes = changeLog.filter((e): e is Extract<ChangeEntry, { action: 'delete' }> => e.action === 'delete')
 
       if (upserts.length > 0) {
-        await prodIndex.addDocuments(upserts.map((e) => e.doc)).waitTask({ timeout: 60_000 })
+        await prodIndex.addDocuments(upserts.map((e) => e.doc)).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
       }
       for (const del of deletes) {
         await prodIndex.deleteDocument(del.id)
@@ -132,6 +145,67 @@ export async function rebuildSearchIndex(): Promise<void> {
   } finally {
     changeLog = null
     rebuilding = false
+  }
+}
+
+/**
+ * Idempotent startup hook for search. Inspects the Meilisearch state and
+ * only triggers a full `rebuildSearchIndex()` if the articles index is
+ * missing or empty. When the index is already populated — the common case
+ * after a tsx-watch HMR restart or a normal prod redeploy — flip
+ * searchReady on and return immediately.
+ *
+ * This avoids the race that happens when each restart fires a fresh
+ * rebuild while the previous process's index-management tasks are still
+ * in the Meilisearch queue (the symptom is "Index `articles_staging`
+ * already exists" failures and waitTask timeouts piling up).
+ *
+ * The 6-hour cron continues to call `rebuildSearchIndex()` directly so a
+ * full refresh still happens periodically.
+ */
+export async function ensureSearchIndex(): Promise<void> {
+  // Step 1: existence and population check. Failures here usually mean
+  // Meilisearch is unreachable, so we want to fall through to the rebuild
+  // path so the startup retry loop can confirm whether Meili is back.
+  let populatedDocCount = 0
+  try {
+    const client = getSearchClient()
+    const { results: existingIndexes } = await client.getIndexes()
+    const articles = existingIndexes.find((idx: { uid: string }) => idx.uid === ARTICLES_INDEX)
+    if (articles) {
+      const stats = await client.index(ARTICLES_INDEX).getStats()
+      if (stats.numberOfDocuments > 0) {
+        populatedDocCount = stats.numberOfDocuments
+      }
+    }
+  } catch (err) {
+    log.warn('ensureSearchIndex existence check failed; falling through to rebuild:', err)
+  }
+
+  if (populatedDocCount > 0) {
+    // Step 2: schema sync. Apply current INDEX_SETTINGS idempotently so a
+    // redeploy that changed filterableAttributes / searchableAttributes
+    // picks up the new schema without paying for a full rebuild.
+    // Deliberately do NOT fall back to rebuildSearchIndex on failure here:
+    // the only way this fails is Meilisearch queue pressure or a transient
+    // error, and triggering a full rebuild (delete + create + swap +
+    // batches) under that condition is exactly what produced the original
+    // "Index articles_staging already exists" pile-up. Surface the error
+    // to the startup retry loop instead so it backs off cleanly.
+    const client = getSearchClient()
+    await client.index(ARTICLES_INDEX).updateSettings(INDEX_SETTINGS).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
+    searchReady = true
+    log.info(`Search index already populated (${populatedDocCount} docs); skipping startup rebuild`)
+    return
+  }
+
+  await rebuildSearchIndex()
+  if (!searchReady) {
+    // rebuildSearchIndex swallows its own errors and just leaves
+    // searchReady at its prior value. Surface that as a thrown error so
+    // the startup retry loop in server/index.ts can back off and try
+    // again instead of declaring success against an unbuilt index.
+    throw new Error('Search index rebuild did not complete')
   }
 }
 
@@ -237,7 +311,7 @@ export async function syncAllScoredArticlesToSearch(): Promise<number> {
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE)
-    await index.updateDocuments(batch.map(({ id, score }) => ({ id, score }))).waitTask({ timeout: 60_000 })
+    await index.updateDocuments(batch.map(({ id, score }) => ({ id, score }))).waitTask({ timeout: MEILI_TASK_TIMEOUT_MS })
   }
 
   return rows.length
