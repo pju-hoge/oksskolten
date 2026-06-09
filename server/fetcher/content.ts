@@ -1,4 +1,6 @@
-import Piscina from 'piscina'
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { Piscina as PiscinaPool } from 'piscina'
 import { JSDOM } from 'jsdom'
 import { fetchHtml } from './http.js'
 import { fetchViaFlareSolverr } from './flaresolverr.js'
@@ -7,15 +9,55 @@ import type { ParseHtmlInput, ParseHtmlResult } from './contentWorker.js'
 
 // Worker pool for CPU-intensive DOM parsing (jsdom + Readability + Turndown).
 // Runs on separate threads so the main event loop stays responsive for API requests.
-// Inherit the parent's execArgv so the tsx TypeScript loader is available in workers.
-const pool = new Piscina({
-  filename: new URL('./contentWorker.ts', import.meta.url).href,
+//
+// Resolve the worker file by checking the filesystem rather than branching on
+// NODE_ENV. The compiled .js exists only in production builds (dist-server/),
+// while the .ts source is what's on disk under tsx dev. tsx's loader hooks
+// don't intercept the Worker entry-point URL — it must point at a file that
+// actually exists.
+//
+// JSDOM allocates 3-4 instances per parse, so each worker needs heap headroom
+// for heavy pages (Reuters, Medium-class sites with large inline scripts).
+// Use Worker resourceLimits.maxOldGenerationSizeMb instead of putting
+// --max-old-space-size in execArgv: Node validates worker execArgv and rejects
+// V8 memory flags.
+const jsWorkerUrl = new URL('./contentWorker.js', import.meta.url)
+const tsWorkerUrl = new URL('./contentWorker.ts', import.meta.url)
+const workerUrl = fs.existsSync(fileURLToPath(jsWorkerUrl)) ? jsWorkerUrl : tsWorkerUrl
+
+const pool = new PiscinaPool({
+  filename: workerUrl.href,
   execArgv: process.execArgv,
+  resourceLimits: {
+    maxOldGenerationSizeMb: 512,
+  },
   maxThreads: Number(process.env.PARSE_MAX_THREADS) || 2,
+  // Keep at least one warm worker. minThreads: 0 forced a cold spawn for the
+  // first task in every sparse batch; the spawn-plus-parse latency could
+  // approach the per-task timeout under load.
+  minThreads: 1,
+  idleTimeout: 30_000,
 })
 
 /** Per-task timeout for worker pool. */
 const WORKER_TIMEOUT_MS = 45_000
+
+/**
+ * Run a worker task with a cancellable timeout. Unlike AbortSignal.timeout(),
+ * the underlying timer is cleared once the task settles, so the abort listener
+ * never fires after the promise resolves. Without this, Piscina's internal
+ * abort cleanup occasionally produced unhandled-rejection noise long after
+ * the batch had completed.
+ */
+async function runWithTimeout(input: ParseHtmlInput, timeoutMs: number): Promise<ParseHtmlResult> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(new Error('Worker timeout')), timeoutMs)
+  try {
+    return await pool.run(input, { signal: controller.signal })
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
 
 /**
  * Minimum character count for extracted article text to be considered valid.
@@ -134,7 +176,7 @@ export async function fetchFullText(articleUrl: string, options?: FetchFullTextO
 
   // Step 2: Parse HTML in worker thread (CPU-intensive, off main thread)
   const input: ParseHtmlInput = { html: cleanedHtml, articleUrl, cleanerConfig }
-  const result: ParseHtmlResult = await pool.run(input, { signal: AbortSignal.timeout(WORKER_TIMEOUT_MS) })
+  const result = await runWithTimeout(input, WORKER_TIMEOUT_MS)
 
   // Step 3: FlareSolverr fallback if extracted text is too short or looks like garbage
   const extractedLen = result.fullText.replace(/\s+/g, ' ').trim().length
@@ -146,7 +188,7 @@ export async function fetchFullText(articleUrl: string, options?: FetchFullTextO
     if (flare) {
       const flareHtml = stripHeavyTags(extractAnchoredContentHtml(flare.body, articleUrl))
       const flareInput: ParseHtmlInput = { html: flareHtml, articleUrl, cleanerConfig }
-      const flareResult: ParseHtmlResult = await pool.run(flareInput, { signal: AbortSignal.timeout(WORKER_TIMEOUT_MS) })
+      const flareResult = await runWithTimeout(flareInput, WORKER_TIMEOUT_MS)
       const flareLen = flareResult.fullText.replace(/\s+/g, ' ').trim().length
       if (flareLen > extractedLen) {
         return flareResult
